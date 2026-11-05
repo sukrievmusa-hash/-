@@ -1,4 +1,10 @@
 'use strict';
+window.addEventListener('error', (e) => {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:99;background:#ef5b6b;color:#fff;padding:10px 12px;border-radius:10px;font:13px system-ui';
+  d.textContent = 'Ошибка на сайте: ' + e.message + ' (скиньте это сообщение Claude)';
+  document.body.append(d);
+});
 /* Мат-повтор: интервальное повторение (кривая забывания) + игровой режим.
    Всё хранится в localStorage браузера, сервер не нужен. */
 
@@ -69,6 +75,7 @@ function dueCards(sc = ALL) {
   const fresh = S.cards.filter((c) => inScope(c, sc) && !c.seen).slice(0, newLeft());
   return rev.concat(fresh);
 }
+function extraNewCards(sc = ALL) { return S.cards.filter((c) => inScope(c, sc) && !c.seen).slice(0, 10); }
 function practiceCards(sc = ALL) {
   return S.cards.filter((c) => inScope(c, sc))
     .map((c) => [c, (c.seen ? c.ease : 2.6) + Math.random() * 0.6]) // слабые карточки чаще, остальное вперемешку
@@ -131,9 +138,9 @@ function refresh() {
   const parts = LECS.filter((l) => by[l.id]).map((l) => `${lecLabel(l.title)} · ${by[l.id]}`);
   $('#dueSplit').textContent = parts.length
     ? 'Сегодня: ' + parts.slice(0, 4).join(', ') + (parts.length > 4 ? ` и ещё ${parts.length - 4}` : '')
-    : (S.cards.some((c) => !c.seen) ? 'Новые карточки откроются завтра' : 'На сегодня всё повторено ✓');
-  $('#playBtn').disabled = due === 0;
-  $('#playBtn').style.opacity = due === 0 ? .5 : 1;
+    : (S.cards.some((c) => !c.seen) ? 'На сегодня всё повторено ✓ Норма новых карточек выполнена' : 'На сегодня всё повторено ✓');
+  const pb = $('#playBtn');
+  pb.textContent = due ? '▶ Повторить на сегодня' : extraNewCards(ALL).length ? '➕ Выучить ещё 10 новых карточек' : '▶ Практика по всем темам';
   renderTopics();
   if (!$('#sheet').hidden) refreshSheet();
 
@@ -221,14 +228,15 @@ function refreshSheet() {
   const st = scopeStats(sc), due = st.due;
   $('#shTitle').textContent = scopeTitle(sc);
   $('#shInfo').textContent = `Изучено ${st.seen} из ${st.total}. Сегодня: повторить ${st.rev}, новых ${st.fresh}`;
-  $('#shRepeat').disabled = !due;
-  $('#shRepeat').textContent = due ? `▶ Повторить (${due})` : 'На сегодня всё повторено ✓';
+  const more = extraNewCards(sc).length;
+  $('#shRepeat').disabled = !due && !more;
+  $('#shRepeat').textContent = due ? `▶ Повторить (${due})` : more ? `➕ Выучить ещё ${Math.min(10, more)} новых` : 'Всё повторено ✓';
   $('#shPractice').textContent = `Практика (${Math.min(10, all.length)} карточек)`;
   $('#shPractice').disabled = !all.length;
 }
 $('#shClose').onclick = closeSheet;
 $('#sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') closeSheet(); });
-$('#shRepeat').onclick = () => { const sc = sheetScope; closeSheet(); startGame(false, sc); };
+$('#shRepeat').onclick = () => { const sc = sheetScope; closeSheet(); startGame(false, sc, !dueCards(sc).length); };
 $('#shPractice').onclick = () => { const sc = sheetScope; closeSheet(); startGame(true, sc); };
 
 function renderCards() {
@@ -254,10 +262,10 @@ $('#search').addEventListener('input', renderCards);
 /* ---------- добавление данных ---------- */
 /* ---------- игра ---------- */
 let G = null;
-function startGame(practice, sc = ALL) {
-  let q = practice ? practiceCards(sc) : dueCards(sc).slice(0, 10);
+function startGame(practice, sc = ALL, extra = false) {
+  let q = practice ? practiceCards(sc) : extra ? extraNewCards(sc) : dueCards(sc).slice(0, 10);
   if (!q.length) return;
-  G = { q, total: q.length, i: 0, hearts: 3, combo: 0, bestCombo: 0, xp: 0, right: 0, wrong: 0, practice, scope: sc, lvl: level(S.stats.xp) };
+  G = { q, total: q.length, i: 0, hearts: 3, combo: 0, bestCombo: 0, xp: 0, right: 0, wrong: 0, practice, extra, scope: sc, lvl: level(S.stats.xp) };
   $('#game').hidden = false; $('#gResult').hidden = true;
   $('.flash').hidden = false;
   nextCard();
@@ -323,8 +331,8 @@ function finish() {
   r.append(h);
   lines.forEach((t) => { const p = document.createElement('div'); p.className = 'stat'; p.textContent = t; r.append(p); });
   const again = document.createElement('button'); again.className = 'primary'; again.textContent = 'Ещё раунд';
-  const wasPractice = G.practice, sc = G.scope;
-  again.onclick = () => { closeGame(); if (wasPractice || dueCards(sc).length) startGame(wasPractice, sc); };
+  const wasPractice = G.practice, wasExtra = G.extra, sc = G.scope;
+  again.onclick = () => { closeGame(); if (wasPractice) startGame(true, sc); else if (dueCards(sc).length) startGame(false, sc); else if (extraNewCards(sc).length) startGame(false, sc, true); };
   const home = document.createElement('button'); home.className = 'ghost'; home.textContent = 'На главную';
   home.onclick = closeGame;
   r.append(again, home);
@@ -335,7 +343,11 @@ function closeGame() {
   G = null; $('#game').hidden = true; $('.flash').hidden = false; refresh();
 }
 $('#gClose').onclick = closeGame;
-$('#playBtn').onclick = () => startGame(false, ALL);
+$('#playBtn').onclick = () => {
+  if (dueCards(ALL).length) startGame(false, ALL);
+  else if (extraNewCards(ALL).length) startGame(false, ALL, true);
+  else startGame(true, ALL);
+};
 
 /* ---------- настройки ---------- */
 $('#goalInput').value = S.settings.goal;
