@@ -12,9 +12,12 @@ let S = (() => {
   return {
     lectures: [], cards: [],
     stats: { xp: 0, streak: 0, last: '', best: 0, log: {} },
-    settings: { goal: 20, remind: '', lastNotify: 0 }
+    settings: { goal: 15, newPerDay: 15, remind: '', lastNotify: 0 }
   };
 })();
+S.stats.newLog = S.stats.newLog || {};
+S.builtinSeen = S.builtinSeen || [];
+if (S.settings.newPerDay == null) S.settings.newPerDay = 15;
 const save = () => localStorage.setItem(KEY, JSON.stringify(S));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const dayKey = (d = new Date()) => d.toLocaleDateString('sv');
@@ -44,7 +47,31 @@ function previewLabel(c, g) {
   if (g === 0) return '10 мин';
   return t.interval + ' дн';
 }
-const dueCards = () => S.cards.filter((c) => c.due <= Date.now()).sort((a, b) => a.due - b.due);
+function newLeft() { return Math.max(0, S.settings.newPerDay - (S.stats.newLog[dayKey()] || 0)); }
+function dueCards() {
+  const now = Date.now();
+  const rev = S.cards.filter((c) => c.seen && c.due <= now).sort((a, b) => a.due - b.due);
+  const fresh = S.cards.filter((c) => !c.seen).slice(0, newLeft());
+  return rev.concat(fresh);
+}
+
+/* ---------- встроенные лекции (lectures.js) ---------- */
+function mergeBuiltin() {
+  const B = window.BUILTIN_LECTURES || [];
+  const seen = new Set(S.builtinSeen);
+  B.forEach((l) => {
+    const lid = 'b-' + l.id;
+    if (!S.lectures.some((x) => x.id === lid) && l.cards.some((_, i) => !seen.has(lid + '-' + i)))
+      S.lectures.push({ id: lid, title: l.title, notes: '', created: Date.now(), builtin: true });
+    l.cards.forEach(([q, a], i) => {
+      const cid = lid + '-' + i;
+      if (seen.has(cid)) return;
+      S.cards.push({ id: cid, lecture: lid, q, a, ease: 2.5, interval: 0, reps: 0, lapses: 0, due: Date.now(), created: Date.now(), seen: false });
+      S.builtinSeen.push(cid);
+    });
+  });
+}
+mergeBuiltin();
 const lectureName = (id) => (S.lectures.find((l) => l.id === id) || {}).title || '';
 
 /* ---------- математика (KaTeX) ---------- */
@@ -78,8 +105,9 @@ function refresh() {
   $('#hLevel').textContent = level(S.stats.xp);
   $('#hXp').textContent = S.stats.xp;
 
-  const due = dueCards().length;
+  const dl = dueCards(), due = dl.length, nNew = dl.filter((c) => !c.seen).length;
   $('#dueCount').textContent = due;
+  $('#dueSplit').textContent = due ? `повторить: ${due - nNew} · новых: ${nNew}` : (S.cards.some((c) => !c.seen) ? 'Новые карточки откроются завтра' : '');
   $('#playBtn').disabled = due === 0;
   $('#playBtn').style.opacity = due === 0 ? .5 : 1;
   $('#emptyHint').hidden = S.cards.length > 0;
@@ -99,7 +127,7 @@ function refresh() {
   const counts = [];
   for (let i = 0; i < 7; i++) {
     const a = start.getTime() + i * DAY, b = a + DAY;
-    counts.push(S.cards.filter((c) => (i === 0 ? c.due < b : c.due >= a && c.due < b)).length);
+    counts.push(i === 0 ? due : S.cards.filter((c) => c.seen && c.due >= a && c.due < b).length);
   }
   const max = Math.max(1, ...counts);
   counts.forEach((n, i) => {
@@ -124,7 +152,7 @@ function refresh() {
     const t = document.createElement('div'); t.className = 't';
     t.textContent = l.title;
     const bd = document.createElement('div'); bd.className = 'badge';
-    bd.textContent = `${n.length} карточек, к повтору: ${n.filter((c) => c.due <= Date.now()).length}`;
+    bd.textContent = `изучено ${n.filter((c) => c.seen).length} из ${n.length} · к повтору: ${n.filter((c) => c.seen && c.due <= Date.now()).length}`;
     t.append(bd);
     const del = document.createElement('button'); del.textContent = 'Удалить';
     del.onclick = () => { if (confirm('Удалить лекцию и все её карточки?')) {
@@ -152,7 +180,7 @@ function renderCards() {
     const t = document.createElement('div'); t.className = 't';
     const qq = document.createElement('div'); qq.textContent = c.q;
     const bd = document.createElement('div'); bd.className = 'badge';
-    const d = c.due <= Date.now() ? 'пора повторить' : 'через ' + Math.ceil((c.due - Date.now()) / DAY) + ' дн';
+    const d = !c.seen ? 'новая' : c.due <= Date.now() ? 'пора повторить' : 'через ' + Math.ceil((c.due - Date.now()) / DAY) + ' дн';
     bd.textContent = `${lectureName(c.lecture)} · ${d}`;
     t.append(qq, bd); renderMath(qq);
     const del = document.createElement('button'); del.textContent = '✕';
@@ -178,7 +206,7 @@ $('#addCards').onclick = () => {
     if (i < 0) return;
     const q = line.slice(0, i).trim(), a = line.slice(i + 2).trim();
     if (!q || !a) return;
-    S.cards.push({ id: uid(), lecture: lec, q, a, ease: 2.5, interval: 0, reps: 0, lapses: 0, due: Date.now(), created: Date.now() });
+    S.cards.push({ id: uid(), lecture: lec, q, a, ease: 2.5, interval: 0, reps: 0, lapses: 0, due: Date.now(), created: Date.now(), seen: false });
     n++;
   });
   if (!n) return alert('Не нашёл ни одной строки вида «вопрос ;; ответ»');
@@ -193,7 +221,7 @@ $('#seedBtn').onclick = () => {
     ['Определение производной', "$f'(x)=\\lim_{h\\to0}\\frac{f(x+h)-f(x)}{h}$"],
     ['Производная $e^x$', '$e^x$'],
     ['Чему равен $\\int x\\,dx$?', '$\\frac{x^2}{2}+C$']
-  ].forEach(([q, a]) => S.cards.push({ id: uid(), lecture: id, q, a, ease: 2.5, interval: 0, reps: 0, lapses: 0, due: Date.now(), created: Date.now() }));
+  ].forEach(([q, a]) => S.cards.push({ id: uid(), lecture: id, q, a, ease: 2.5, interval: 0, reps: 0, lapses: 0, due: Date.now(), created: Date.now(), seen: false }));
   refresh();
 };
 
@@ -201,7 +229,7 @@ $('#seedBtn').onclick = () => {
 let G = null;
 function startGame(practice) {
   let q = practice
-    ? [...S.cards].sort((a, b) => a.ease - b.ease || a.due - b.due).slice(0, 10)
+    ? (S.cards.some((c) => c.seen) ? S.cards.filter((c) => c.seen) : S.cards).slice().sort((a, b) => a.ease - b.ease || Math.random() - .5).slice(0, 10)
     : dueCards().slice(0, 10);
   if (!q.length) return;
   G = { q, total: q.length, i: 0, hearts: 3, combo: 0, bestCombo: 0, xp: 0, right: 0, wrong: 0, practice, lvl: level(S.stats.xp) };
@@ -237,7 +265,10 @@ $$('#gGrades button').forEach((b) => b.addEventListener('click', () => {
     const gain = Math.round((g === 3 ? 15 : g === 2 ? 10 : 6) * (1 + Math.min(G.combo, 10) * 0.1) * (G.practice ? .5 : 1));
     G.xp += gain;
   }
-  if (!G.practice) { schedule(c, g); bumpDay(); }
+  if (!G.practice) {
+    if (!c.seen) { c.seen = true; const k = dayKey(); S.stats.newLog[k] = (S.stats.newLog[k] || 0) + 1; }
+    schedule(c, g); bumpDay();
+  }
   G.i++;
   save(); nextCard();
 }));
@@ -284,6 +315,8 @@ $('#practiceBtn').onclick = () => startGame(true);
 /* ---------- настройки ---------- */
 $('#goalInput').value = S.settings.goal;
 $('#goalInput').onchange = (e) => { S.settings.goal = Math.max(1, +e.target.value || 20); refresh(); };
+$('#newInput').value = S.settings.newPerDay;
+$('#newInput').onchange = (e) => { S.settings.newPerDay = Math.max(0, +e.target.value || 0); refresh(); };
 $('#remindTime').value = S.settings.remind || '';
 $('#remindTime').onchange = (e) => { S.settings.remind = e.target.value; save(); };
 $('#notifyBtn').onclick = async () => {
@@ -303,7 +336,7 @@ $('#importFile').onchange = (e) => {
       const d = JSON.parse(t);
       if (!Array.isArray(d.cards) || !Array.isArray(d.lectures)) throw 0;
       if (!confirm('Заменить текущие данные загруженной копией?')) return;
-      S = d; refresh(); alert('Готово');
+      S = d; S.stats.newLog = S.stats.newLog || {}; S.builtinSeen = S.builtinSeen || []; mergeBuiltin(); refresh(); alert('Готово');
     } catch (err) { alert('Это не похоже на копию данных'); }
   });
 };

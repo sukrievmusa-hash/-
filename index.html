@@ -5,9 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Математика: повторение-игра</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<script defer src="vendor/katex/katex.min.js"></script>
+<script defer src="vendor/katex/contrib/auto-render.min.js"></script>
+<script defer src="lectures.js"></script>
 <script defer src="script.js"></script>
 </head>
 <body>
@@ -34,7 +35,8 @@
     <div id="reminder" class="banner" hidden></div>
     <div class="panel big">
       <div class="due-num"><span id="dueCount">0</span></div>
-      <div class="muted">карточек пора повторить сегодня</div>
+      <div class="muted">карточек на сегодня</div>
+      <div class="muted small" id="dueSplit"></div>
       <button id="playBtn" class="primary">▶ Играть</button>
       <button id="practiceBtn" class="ghost">Потренироваться сверх плана</button>
     </div>
@@ -93,6 +95,9 @@
     <div class="panel">
       <h3>Цель в день (карточек)</h3>
       <input id="goalInput" type="number" min="1" max="200">
+      <h3>Новых карточек в день</h3>
+      <input id="newInput" type="number" min="0" max="200">
+      <p class="muted small">Новые карточки открываются постепенно, чтобы повторения не копились лавиной. Если хотите идти быстрее, увеличьте число.</p>
     </div>
     <div class="panel">
       <h3>Напоминания</h3>
