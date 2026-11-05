@@ -76,9 +76,13 @@ function dueCards(sc = ALL) {
   return rev.concat(fresh);
 }
 function extraNewCards(sc = ALL) { return S.cards.filter((c) => inScope(c, sc) && !c.seen).slice(0, 10); }
+function weakCards(sc = ALL) {
+  return S.cards.filter((c) => inScope(c, sc) && (c.bad || 0) > 0)
+    .sort((a, b) => (b.bad / ((b.ok || 0) + b.bad)) - (a.bad / ((a.ok || 0) + a.bad)) || b.bad - a.bad).slice(0, 10);
+}
 function practiceCards(sc = ALL) {
   return S.cards.filter((c) => inScope(c, sc))
-    .map((c) => [c, (c.seen ? c.ease : 2.6) + Math.random() * 0.6]) // слабые карточки чаще, остальное вперемешку
+    .map((c) => [c, (c.seen ? c.ease : 2.6) - 0.15 * Math.min(c.bad || 0, 6) + Math.random() * 0.6]) // слабые и «ошибочные» карточки чаще
     .sort((a, b) => a[1] - b[1]).slice(0, 10).map((x) => x[0]);
 }
 
@@ -142,6 +146,7 @@ function refresh() {
   const pb = $('#playBtn');
   pb.textContent = due ? '▶ Повторить на сегодня' : extraNewCards(ALL).length ? '➕ Выучить ещё 10 новых карточек' : '▶ Практика по всем темам';
   renderTopics();
+  renderProgress();
   if (!$('#sheet').hidden) refreshSheet();
 
   const done = S.stats.log[dayKey()] || 0;
@@ -175,12 +180,19 @@ function streakNow() {
   const y = dayKey(new Date(Date.now() - DAY));
   return (l === dayKey() || l === y) ? S.stats.streak : 0;
 }
+/* уровень знания карточки: 0 — не изучена, растёт с интервалом повторения (30+ дней = 100%) */
+const cardLevel = (c) => !c.seen ? 0 : Math.min(1, 0.1 + 0.9 * Math.log2(1 + (c.interval || 0)) / Math.log2(31));
+const LEVELS = [[0.2, 'Новичок'], [0.4, 'Знакомство'], [0.6, 'Уверенно'], [0.8, 'Хорошо'], [1.01, 'Мастер']];
+const levelName = (x) => LEVELS.find((l) => x < l[0])[1];
+const levelColor = (x) => x < 0.2 ? 'var(--bad)' : x < 0.4 ? 'var(--warn)' : x < 0.6 ? 'var(--accent)' : 'var(--good)';
 function scopeStats(sc) {
   const all = S.cards.filter((c) => inScope(c, sc)), now = Date.now();
   const seen = all.filter((c) => c.seen).length;
   const rev = all.filter((c) => c.seen && c.due <= now).length;
   const fresh = Math.min(all.length - seen, newLeft());
-  return { total: all.length, seen, rev, fresh, due: rev + fresh };
+  const level = all.length ? all.reduce((a, c) => a + cardLevel(c), 0) / all.length : 0;
+  const ok = all.reduce((a, c) => a + (c.ok || 0), 0), bad = all.reduce((a, c) => a + (c.bad || 0), 0);
+  return { total: all.length, seen, rev, fresh, due: rev + fresh, level, ok, bad, answers: ok + bad, errRate: ok + bad ? bad / (ok + bad) : 0 };
 }
 let openSec = 0;
 function renderTopics() {
@@ -200,8 +212,9 @@ function renderTopics() {
     const l1 = document.createElement('b'); l1.textContent = label;
     t.append(l1);
     if (topic) { const l2 = document.createElement('span'); l2.textContent = topic; t.append(l2); }
-    const l3 = document.createElement('span'); l3.textContent = `изучено ${st.seen} из ${st.total}` + (st.rev ? ` · пора повторить: ${st.rev}` : ''); t.append(l3);
-    const mini = document.createElement('div'); mini.className = 'mini'; const i = document.createElement('i'); i.style.width = (st.total ? st.seen / st.total * 100 : 0) + '%'; mini.append(i); t.append(mini);
+    const l3 = document.createElement('span'); l3.textContent = `Знание ${Math.round(st.level * 100)}% · ${levelName(st.level)}`; t.append(l3);
+    const l4 = document.createElement('span'); l4.textContent = `изучено ${st.seen} из ${st.total}` + (st.rev ? ` · пора повторить: ${st.rev}` : ''); t.append(l4);
+    const mini = document.createElement('div'); mini.className = 'mini'; const i = document.createElement('i'); i.style.width = Math.round(st.level * 100) + '%'; i.style.background = levelColor(st.level); mini.append(i); t.append(mini);
     b.append(t, pill(st)); b.onclick = () => openSheet(sc); return b;
   };
   secs.forEach((k) => {
@@ -227,7 +240,7 @@ function refreshSheet() {
   const sc = sheetScope, all = S.cards.filter((c) => inScope(c, sc));
   const st = scopeStats(sc), due = st.due;
   $('#shTitle').textContent = scopeTitle(sc);
-  $('#shInfo').textContent = `Изучено ${st.seen} из ${st.total}. Сегодня: повторить ${st.rev}, новых ${st.fresh}`;
+  $('#shInfo').textContent = `Знание ${Math.round(st.level * 100)}% (${levelName(st.level)}). Изучено ${st.seen} из ${st.total}. Сегодня: повторить ${st.rev}, новых ${st.fresh}`;
   const more = extraNewCards(sc).length;
   $('#shRepeat').disabled = !due && !more;
   $('#shRepeat').textContent = due ? `▶ Повторить (${due})` : more ? `➕ Выучить ещё ${Math.min(10, more)} новых` : 'Всё повторено ✓';
@@ -238,6 +251,62 @@ $('#shClose').onclick = closeSheet;
 $('#sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') closeSheet(); });
 $('#shRepeat').onclick = () => { const sc = sheetScope; closeSheet(); startGame(false, sc, !dueCards(sc).length); };
 $('#shPractice').onclick = () => { const sc = sheetScope; closeSheet(); startGame(true, sc); };
+
+/* ---------- вкладка «Прогресс» ---------- */
+function prow(title, sub, right, frac, color) {
+  const d = document.createElement('div'); d.className = 'prow';
+  const top = document.createElement('div'); top.className = 'ptop';
+  const a = document.createElement('b'); a.textContent = title; const r = document.createElement('span'); r.textContent = right;
+  top.append(a, r); d.append(top);
+  if (sub) { const m = document.createElement('div'); m.className = 'muted small'; m.textContent = sub; d.append(m); }
+  const bar = document.createElement('div'); bar.className = 'mini big'; const i = document.createElement('i');
+  i.style.width = Math.round(Math.max(0, Math.min(1, frac)) * 100) + '%'; i.style.background = color; bar.append(i); d.append(bar);
+  return d;
+}
+function renderProgress() {
+  const secs = Object.keys(SEC_NAMES).map(Number);
+  // общий уровень
+  const all = scopeStats(ALL), pct = Math.round(all.level * 100);
+  $('#lvOverall').textContent = pct + '%';
+  $('#lvOverallName').textContent = `${levelName(all.level)} · изучено ${all.seen} из ${all.total}`;
+  // шкала по разделам и лекциям
+  const lv = $('#lvList'); lv.innerHTML = '';
+  secs.forEach((k) => {
+    const st = scopeStats({ t: 'sec', id: k });
+    lv.append(prow(`Раздел ${k}. ${SEC_NAMES[k]}`, levelName(st.level), Math.round(st.level * 100) + '%', st.level, levelColor(st.level)));
+    LECS.filter((l) => l.section === k).forEach((l) => {
+      const ls = scopeStats({ t: 'lec', id: l.id }), r = prow(lecLabel(l.title), lecTopic(l.title), Math.round(ls.level * 100) + '%', ls.level, levelColor(ls.level));
+      r.classList.add('sub'); lv.append(r);
+    });
+  });
+  // где ошибаешься
+  const errBox = $('#errList'); errBox.innerHTML = '';
+  const MIN = 3; // мало ответов — статистика ненадёжна
+  const errRow = (title, sub, st) => prow(title, sub, `${Math.round(st.errRate * 100)}% ошибок`, st.errRate, st.errRate >= .35 ? 'var(--bad)' : st.errRate >= .2 ? 'var(--warn)' : 'var(--good)');
+  const secRows = secs.map((k) => ({ k, st: scopeStats({ t: 'sec', id: k }) })).filter((x) => x.st.answers >= MIN).sort((a, b) => b.st.errRate - a.st.errRate);
+  const lecRows = LECS.map((l) => ({ l, st: scopeStats({ t: 'lec', id: l.id }) })).filter((x) => x.st.answers >= MIN).sort((a, b) => b.st.errRate - a.st.errRate);
+  const hard = S.cards.filter((c) => (c.bad || 0) > 0).sort((a, b) => b.bad - a.bad || (b.bad / ((b.ok || 0) + b.bad)) - (a.bad / ((a.ok || 0) + a.bad))).slice(0, 5);
+  $('#errEmpty').hidden = lecRows.length > 0 || hard.length > 0;
+  $('#weakBtn').hidden = hard.length === 0;
+  if (lecRows.length && lecRows[0].st.bad) {
+    const w = lecRows[0]; const n = document.createElement('div'); n.className = 'weak';
+    n.textContent = `Слабее всего: ${lecLabel(w.l.title)} — ${w.st.bad} ошибок из ${w.st.answers} ответов`; errBox.append(n);
+  }
+  if (secRows.length) { const h = document.createElement('div'); h.className = 'subh'; h.textContent = 'По разделам'; errBox.append(h);
+    secRows.forEach((x) => errBox.append(errRow(`Раздел ${x.k}`, SEC_NAMES[x.k], x.st))); }
+  if (lecRows.length) { const h = document.createElement('div'); h.className = 'subh'; h.textContent = 'По лекциям'; errBox.append(h);
+    lecRows.forEach((x) => errBox.append(errRow(lecLabel(x.l.title), `${lecTopic(x.l.title)} · ${x.st.bad} из ${x.st.answers}`, x.st))); }
+  const hb = $('#hardList'); hb.innerHTML = '';
+  hard.forEach((c) => {
+    const d = document.createElement('div'); d.className = 'item';
+    const t = document.createElement('div'); t.className = 't';
+    const q = document.createElement('div'); q.textContent = c.q;
+    const m = document.createElement('div'); m.className = 'badge'; m.textContent = `${lectureName(c.lecture)} · ошибок ${c.bad} из ${(c.ok || 0) + c.bad}`;
+    t.append(q, m); d.append(t); hb.append(d); renderMath(q);
+  });
+  $('#hardHead').hidden = hard.length === 0;
+}
+$('#weakBtn').onclick = () => startGame(true, ALL, false, true);
 
 function renderCards() {
   const q = $('#search').value.trim().toLowerCase();
@@ -262,10 +331,10 @@ $('#search').addEventListener('input', renderCards);
 /* ---------- добавление данных ---------- */
 /* ---------- игра ---------- */
 let G = null;
-function startGame(practice, sc = ALL, extra = false) {
-  let q = practice ? practiceCards(sc) : extra ? extraNewCards(sc) : dueCards(sc).slice(0, 10);
+function startGame(practice, sc = ALL, extra = false, weak = false) {
+  let q = weak ? weakCards(sc) : practice ? practiceCards(sc) : extra ? extraNewCards(sc) : dueCards(sc).slice(0, 10);
   if (!q.length) return;
-  G = { q, total: q.length, i: 0, hearts: 3, combo: 0, bestCombo: 0, xp: 0, right: 0, wrong: 0, practice, extra, scope: sc, lvl: level(S.stats.xp) };
+  G = { q, total: q.length, i: 0, hearts: 3, combo: 0, bestCombo: 0, xp: 0, right: 0, wrong: 0, practice, extra, weak, scope: sc, lvl: level(S.stats.xp) };
   $('#game').hidden = false; $('#gResult').hidden = true;
   $('.flash').hidden = false;
   nextCard();
@@ -277,7 +346,7 @@ function nextCard() {
   hearts();
   $('#gBar').style.width = (Math.min(G.i, G.total) / G.total * 100) + '%';
   $('#gCombo').textContent = G.combo >= 2 ? `🔥 комбо ×${G.combo}` : '';
-  $('#gLecture').textContent = (G.practice ? 'Практика · ' : 'Повторение · ') + lectureName(c.lecture);
+  $('#gLecture').textContent = (G.weak ? 'Слабые места · ' : G.practice ? 'Практика · ' : 'Повторение · ') + lectureName(c.lecture);
   setText($('#gQ'), c.q);
   setText($('#gA'), c.a);
   $('#gA').hidden = true; $('#gShow').hidden = false; $('#gGrades').hidden = true;
@@ -290,6 +359,7 @@ $('#gShow').onclick = () => {
 };
 $$('#gGrades button').forEach((b) => b.addEventListener('click', () => {
   const g = +b.dataset.g, c = G.q[G.i];
+  if (g === 0) c.bad = (c.bad || 0) + 1; else c.ok = (c.ok || 0) + 1; // статистика ошибок (и в практике тоже)
   if (g === 0) {
     G.wrong++; G.combo = 0; G.hearts--;
     if (!G.practice && !G.q.slice(G.i + 1).includes(c) && G.hearts > 0) G.q.push(c); // вернётся в конце раунда
@@ -331,8 +401,8 @@ function finish() {
   r.append(h);
   lines.forEach((t) => { const p = document.createElement('div'); p.className = 'stat'; p.textContent = t; r.append(p); });
   const again = document.createElement('button'); again.className = 'primary'; again.textContent = 'Ещё раунд';
-  const wasPractice = G.practice, wasExtra = G.extra, sc = G.scope;
-  again.onclick = () => { closeGame(); if (wasPractice) startGame(true, sc); else if (dueCards(sc).length) startGame(false, sc); else if (extraNewCards(sc).length) startGame(false, sc, true); };
+  const wasPractice = G.practice, wasWeak = G.weak, sc = G.scope;
+  again.onclick = () => { closeGame(); if (wasWeak) startGame(true, sc, false, true); else if (wasPractice) startGame(true, sc); else if (dueCards(sc).length) startGame(false, sc); else if (extraNewCards(sc).length) startGame(false, sc, true); };
   const home = document.createElement('button'); home.className = 'ghost'; home.textContent = 'На главную';
   home.onclick = closeGame;
   r.append(again, home);

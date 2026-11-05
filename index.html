@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Математика: повторение-игра</title>
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
 <script defer src="vendor/katex/katex.min.js"></script>
 <script defer src="vendor/katex/contrib/auto-render.min.js"></script>
-<script defer src="lectures.js?v=7"></script>
-<script defer src="script.js?v=7"></script>
+<script defer src="lectures.js?v=8"></script>
+<script defer src="script.js?v=8"></script>
 </head>
 <body>
 
@@ -24,6 +24,7 @@
 
 <nav class="tabs">
   <button data-tab="home" class="active">Главная</button>
+  <button data-tab="progress">Прогресс</button>
   <button data-tab="cards">Карточки</button>
   <button data-tab="settings">Настройки</button>
 </nav>
@@ -54,6 +55,28 @@
       <div id="forecast" class="forecast"></div>
     </div>
 
+  </section>
+
+  <!-- ПРОГРЕСС -->
+  <section id="tab-progress" class="tab">
+    <div class="panel big">
+      <div class="muted">Общий уровень знаний</div>
+      <div class="due-num"><span id="lvOverall">0%</span></div>
+      <div class="muted" id="lvOverallName"></div>
+    </div>
+    <div class="panel">
+      <h3>Уровень знаний по темам</h3>
+      <div class="muted small legend">Растёт, когда вы верно отвечаете и карточка отодвигается на всё большие сроки. 100% — помните месяц и дольше.</div>
+      <div id="lvList"></div>
+    </div>
+    <div class="panel">
+      <h3>Где чаще всего ошибаетесь</h3>
+      <div id="errEmpty" class="muted">Пока мало данных. Сыграйте несколько раундов, и здесь появится, какие темы вам даются хуже всего.</div>
+      <div id="errList"></div>
+      <h3 id="hardHead" class="subh" hidden>Самые трудные карточки</h3>
+      <div id="hardList"></div>
+      <button id="weakBtn" class="primary" hidden>🎯 Тренировать слабые места</button>
+    </div>
   </section>
 
   <!-- КАРТОЧКИ -->

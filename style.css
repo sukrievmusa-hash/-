@@ -92,3 +92,16 @@ button.primary,button.ghost,button.danger,.filebtn{display:inline-block;border-r
 .sheet .primary,.sheet .ghost{display:block;width:100%;margin:12px 0 0;padding:14px;font-size:16px}
 .sheet .primary:disabled{opacity:.5}
 .pill.new{background:var(--good);color:#06281a}
+
+.tabs button{padding:8px 6px!important}
+.prow{padding:9px 0;border-bottom:1px solid var(--line)}
+.prow:last-child{border:0}
+.prow.sub{padding-left:14px}
+.ptop{display:flex;justify-content:space-between;gap:10px;font-size:15px}
+.ptop span{color:var(--muted);white-space:nowrap}
+.mini.big{height:8px;background:var(--line);border-radius:4px;margin-top:6px;overflow:hidden}
+.mini.big i{display:block;height:100%;border-radius:4px;transition:width .3s}
+.legend{margin-bottom:6px}
+.weak{background:rgba(239,91,107,.14);color:var(--text);border-left:3px solid var(--bad);border-radius:8px;padding:9px 11px;margin-bottom:6px;font-weight:600;font-size:14px}
+.subh{margin:14px 0 2px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+#tab-progress .primary{width:100%;margin-top:14px;padding:13px}
