@@ -1,75 +1,138 @@
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Халяль Баня – Место отдыха и очищения</title>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Математика: повторение-игра</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<script defer src="script.js"></script>
 </head>
-
 <body>
 
-    <!-- Шапка сайта -->
-    <header class="header">
-        <div class="container">
-            <div class="logo">Баня в юрте</div>
-            <nav class="nav">
-                <a href="#about">О нас</a>
-                <a href="#halal">Стандарты Халяль</a>
-                <a href="#contacts">Контакты</a>
-            </nav>
-        </div>
-    </header>
+<header class="top">
+  <div class="brand">∑ Мат-повтор</div>
+  <div class="hud">
+    <span title="Серия дней">🔥 <b id="hStreak">0</b></span>
+    <span title="Уровень">⭐ <b id="hLevel">1</b></span>
+    <span title="Опыт">XP <b id="hXp">0</b></span>
+  </div>
+</header>
 
-    <!-- Слайдер (Фото меняются сами) -->
-    <section class="slider-section">
-        <div class="slider">
-            <!-- Замените ссылки на свои фото бани -->
-            <img src="1" class="slide active" alt="Интерьер бани 1">
-            <img src="2" class="slide" alt="Интерьер бани 2">
-            <img src="3" class="slide" alt="Интерьер бани 3">
-        </div>
-        <div class="slider-overlay">
-            <h1>Традиционная баня на дровах</h1>
-            <p>Премиальный отдых в строгом соответствии с традициями</p>
-        </div>
-    </section>
+<nav class="tabs">
+  <button data-tab="home" class="active">Главная</button>
+  <button data-tab="lectures">Лекции</button>
+  <button data-tab="cards">Карточки</button>
+  <button data-tab="settings">Настройки</button>
+</nav>
 
-    <!-- Описание Халяль бани -->
-    <section id="halal" class="halal-section">
-        <div class="container">
-            <h2>Халяль Стандарты</h2>
-            <div class="halal-content">
-                <p>Наша баня полностью соответствует правилам Халяль.
-                    <p>Стоймость 7000тенге в час. График 24/7!</p>
-                </p>Адрес г.Караганда,Михайловка,ул Мукатая Жанибекова,д.97/4
-                    </p>
-                    <p>Мы гарантируем абсолютную приватность и раздельные
-                    зоны для мужчин и женщин. Внутри строго запрещено употребление алкоголя и свинины.</p>
-                <p>Все помещения проходят тщательную санитарную обработку. Мы используем только натуральные деревянные
-                    материалы, экологичные масла и чистейшую воду для вашего физического и духовного очищения.</p>
-            </div>
-        </div>
-    </section>
+<main>
+  <!-- ГЛАВНАЯ -->
+  <section id="tab-home" class="tab active">
+    <div id="reminder" class="banner" hidden></div>
+    <div class="panel big">
+      <div class="due-num"><span id="dueCount">0</span></div>
+      <div class="muted">карточек пора повторить сегодня</div>
+      <button id="playBtn" class="primary">▶ Играть</button>
+      <button id="practiceBtn" class="ghost">Потренироваться сверх плана</button>
+    </div>
 
-    <!-- Контакты -->
-    <section id="contacts" class="contacts-section">
-        <div class="container">
-            <h2>Забронировать баню</h2>
-            <p>Свяжитесь с нашим менеджером для уточнения свободного времени:</p>
-            <!-- Замените телефон на ваш реальный номер -->
-            <a href="tel:+77771234567" class="phone-btn">📞 +7 706 418 77 90</a>
-            <span class="manager-name">Менеджер по бронированию</span>
-        </div>
-    </section>
+    <div class="panel">
+      <h3>Цель на сегодня</h3>
+      <div class="bar"><div id="goalBar"></div></div>
+      <div class="muted"><span id="goalText"></span></div>
+    </div>
 
-    <!-- Подвал -->
-    <footer class="footer">
-        <p>&copy; 2026 Тёмная Деревянная Баня Халяль. Все права защищены.</p>
-    </footer>
+    <div class="panel">
+      <h3>Что придёт в ближайшие 7 дней</h3>
+      <div id="forecast" class="forecast"></div>
+    </div>
 
-    <script src="script.js"></script>
+    <div class="panel" id="emptyHint" hidden>
+      <h3>Пока пусто</h3>
+      <p class="muted">Добавьте лекцию и карточки во вкладке «Лекции» — или загрузите пример, чтобы посмотреть, как всё работает.</p>
+      <button id="seedBtn" class="ghost">Загрузить пример</button>
+    </div>
+  </section>
+
+  <!-- ЛЕКЦИИ -->
+  <section id="tab-lectures" class="tab">
+    <div class="panel">
+      <h3>1. Новая лекция</h3>
+      <input id="lecTitle" placeholder="Название, например: Лекция 3. Пределы">
+      <textarea id="lecNotes" rows="4" placeholder="Конспект или текст лекции (необязательно, для себя)"></textarea>
+      <button id="addLecture" class="primary">Добавить лекцию</button>
+    </div>
+
+    <div class="panel">
+      <h3>2. Добавить карточки</h3>
+      <select id="cardLecture"></select>
+      <textarea id="bulk" rows="7" placeholder="Одна карточка — одна строка:&#10;вопрос ;; ответ&#10;&#10;Формулы пишите между $ $:&#10;Чему равен $\lim_{x\to0}\frac{\sin x}{x}$? ;; $1$&#10;Определение производной ;; $f'(x)=\lim_{h\to0}\frac{f(x+h)-f(x)}{h}$"></textarea>
+      <button id="addCards" class="primary">Добавить карточки</button>
+      <p class="muted small">Совет: отправьте лекции Claude — он превратит их в готовые строки «вопрос ;; ответ», останется вставить сюда.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Мои лекции</h3>
+      <div id="lectureList"></div>
+    </div>
+  </section>
+
+  <!-- КАРТОЧКИ -->
+  <section id="tab-cards" class="tab">
+    <div class="panel">
+      <input id="search" placeholder="Поиск по карточкам">
+      <div id="cardList"></div>
+    </div>
+  </section>
+
+  <!-- НАСТРОЙКИ -->
+  <section id="tab-settings" class="tab">
+    <div class="panel">
+      <h3>Цель в день (карточек)</h3>
+      <input id="goalInput" type="number" min="1" max="200">
+    </div>
+    <div class="panel">
+      <h3>Напоминания</h3>
+      <label class="row">Время напоминания <input id="remindTime" type="time"></label>
+      <button id="notifyBtn" class="ghost">Разрешить уведомления</button>
+      <p class="muted small">Уведомление приходит, пока сайт открыт во вкладке (можно закрепить её). Если открыть сайт позже, наверху главной всегда покажется баннер с количеством карточек к повтору.</p>
+    </div>
+    <div class="panel">
+      <h3>Резервная копия</h3>
+      <p class="muted small">Данные хранятся в этом браузере. Сделайте копию, чтобы перенести их на другое устройство.</p>
+      <button id="exportBtn" class="ghost">Скачать копию (JSON)</button>
+      <label class="ghost filebtn">Загрузить копию<input id="importFile" type="file" accept="application/json" hidden></label>
+      <button id="resetBtn" class="danger">Удалить все данные</button>
+    </div>
+  </section>
+</main>
+
+<!-- ИГРА -->
+<div id="game" class="overlay" hidden>
+  <div class="gamebox">
+    <div class="gtop">
+      <button id="gClose" class="x" aria-label="Закрыть">✕</button>
+      <div class="bar grow"><div id="gBar"></div></div>
+      <div id="gHearts" class="hearts"></div>
+    </div>
+    <div class="gmeta"><span id="gCombo"></span><span id="gLecture" class="muted"></span></div>
+    <div class="flash">
+      <div id="gQ" class="q"></div>
+      <div id="gA" class="a" hidden></div>
+    </div>
+    <button id="gShow" class="primary">Показать ответ</button>
+    <div id="gGrades" class="grades" hidden>
+      <button data-g="0" class="g0">Забыл<small></small></button>
+      <button data-g="1" class="g1">Трудно<small></small></button>
+      <button data-g="2" class="g2">Помню<small></small></button>
+      <button data-g="3" class="g3">Легко<small></small></button>
+    </div>
+    <div id="gResult" hidden></div>
+  </div>
+</div>
+
 </body>
-
 </html>
