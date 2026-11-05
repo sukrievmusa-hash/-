@@ -64,3 +64,9 @@ button.primary,button.ghost,button.danger,.filebtn{display:inline-block;border-r
 #gResult .stat{font-size:18px;margin:6px 0}
 .pop{animation:pop .35s}
 @keyframes pop{0%{transform:scale(.9);opacity:.4}100%{transform:scale(1);opacity:1}}
+
+.chips{display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-bottom:6px}
+.chip{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:6px 9px;font-size:13px;white-space:nowrap}
+.chip b{display:inline-block;min-width:18px;margin-left:3px;padding:0 5px;border-radius:9px;background:var(--line);color:var(--muted);font-size:12px;line-height:18px}
+.chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.active b{background:rgba(255,255,255,.25);color:#fff}

@@ -2,8 +2,10 @@
 import json, sys
 
 L = []
+SECTIONS = {1: "Линейная и векторная алгебра", 2: "Аналитическая геометрия на плоскости и в пространстве", 3: "Дифференциальное исчисление функций одной переменной"}
+SEC_OF = {"l1": 1, "l2": 1, "l3": 1, "l4": 1, "l5": 1, "p2": 1, "l6": 2, "l9": 3}  # для новых лекций допишите сюда
 def lec(id_, title):
-    L.append({"id": id_, "title": title, "cards": []})
+    L.append({"id": id_, "title": title, "section": SEC_OF[id_], "cards": []})
 def c(q, a):
     L[-1]["cards"].append([q, a])
 
@@ -217,7 +219,7 @@ c("Найдите $A^{-1}$ для $A=\\begin{pmatrix}2&3\\\\0&1\\end{pmatrix}$",
 c("Как проверить найденное решение системы?", "Подставить значения во все уравнения: каждое должно обратиться в верное равенство")
 
 total = sum(len(l["cards"]) for l in L)
-out = "/* Сгенерировано автоматически из лекций. Карточек: %d */\nwindow.BUILTIN_LECTURES = %s;\n" % (total, json.dumps(L, ensure_ascii=False, indent=1))
+out = "/* Сгенерировано автоматически из лекций. Карточек: %d */\nwindow.BUILTIN_SECTIONS = %s;\nwindow.BUILTIN_LECTURES = %s;\n" % (total, json.dumps(SECTIONS, ensure_ascii=False), json.dumps(L, ensure_ascii=False, indent=1))
 open(sys.argv[1], "w").write(out)
 for l in L: print(l["id"], len(l["cards"]), l["title"])
 print("total", total)

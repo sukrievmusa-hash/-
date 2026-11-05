@@ -48,11 +48,23 @@ function previewLabel(c, g) {
   return t.interval + ' дн';
 }
 function newLeft() { return Math.max(0, S.settings.newPerDay - (S.stats.newLog[dayKey()] || 0)); }
-function dueCards() {
+/* разделы: номер раздела берём из встроенных лекций */
+const SEC_NAMES = window.BUILTIN_SECTIONS || {};
+const SEC_BY_LECTURE = {};
+(window.BUILTIN_LECTURES || []).forEach((l) => { SEC_BY_LECTURE['b-' + l.id] = l.section; });
+const sectionOf = (c) => SEC_BY_LECTURE[c.lecture] || 0;
+const curSec = () => { const v = +S.settings.section || 0; return SEC_NAMES[v] ? v : 0; };
+const inSec = (c, sec) => !sec || sectionOf(c) === sec;
+function dueCards(sec = 0) {
   const now = Date.now();
-  const rev = S.cards.filter((c) => c.seen && c.due <= now).sort((a, b) => a.due - b.due);
-  const fresh = S.cards.filter((c) => !c.seen).slice(0, newLeft());
+  const rev = S.cards.filter((c) => inSec(c, sec) && c.seen && c.due <= now).sort((a, b) => a.due - b.due);
+  const fresh = S.cards.filter((c) => inSec(c, sec) && !c.seen).slice(0, newLeft());
   return rev.concat(fresh);
+}
+function practiceCards(sec = 0) {
+  return S.cards.filter((c) => inSec(c, sec))
+    .map((c) => [c, (c.seen ? c.ease : 2.6) + Math.random() * 0.6]) // слабые карточки чаще, остальное вперемешку
+    .sort((a, b) => a[1] - b[1]).slice(0, 10).map((x) => x[0]);
 }
 
 /* ---------- встроенные лекции (lectures.js) ---------- */
@@ -105,10 +117,15 @@ function refresh() {
   $('#hLevel').textContent = level(S.stats.xp);
   $('#hXp').textContent = S.stats.xp;
 
-  const dl = dueCards(), due = dl.length, nNew = dl.filter((c) => !c.seen).length;
+  const sec = curSec();
+  renderChips();
+  const dl = dueCards(sec), due = dl.length, nNew = dl.filter((c) => !c.seen).length;
   $('#dueCount').textContent = due;
-  $('#dueSplit').textContent = due ? `повторить: ${due - nNew} · новых: ${nNew}` : (S.cards.some((c) => !c.seen) ? 'Новые карточки откроются завтра' : '');
+  $('#dueSplit').textContent = due ? `повторить: ${due - nNew} · новых: ${nNew}` : (S.cards.some((c) => inSec(c, sec) && !c.seen) ? 'Новые карточки откроются завтра' : '');
   $('#playBtn').disabled = due === 0;
+  const pc = S.cards.filter((c) => inSec(c, sec)).length;
+  $('#practiceBtn').disabled = pc === 0;
+  $('#practiceBtn').textContent = sec ? `Практика: раздел ${sec}` : 'Практика по всем разделам';
   $('#playBtn').style.opacity = due === 0 ? .5 : 1;
 
   const done = S.stats.log[dayKey()] || 0;
@@ -126,7 +143,7 @@ function refresh() {
   const counts = [];
   for (let i = 0; i < 7; i++) {
     const a = start.getTime() + i * DAY, b = a + DAY;
-    counts.push(i === 0 ? due : S.cards.filter((c) => c.seen && c.due >= a && c.due < b).length);
+    counts.push(i === 0 ? due : S.cards.filter((c) => inSec(c, sec) && c.seen && c.due >= a && c.due < b).length);
   }
   const max = Math.max(1, ...counts);
   counts.forEach((n, i) => {
@@ -145,6 +162,20 @@ function streakNow() {
   if (!l) return 0;
   const y = dayKey(new Date(Date.now() - DAY));
   return (l === dayKey() || l === y) ? S.stats.streak : 0;
+}
+function renderChips() {
+  const box = $('#secChips'); box.innerHTML = '';
+  const sec = curSec();
+  const add = (v, label, n) => {
+    const b = document.createElement('button'); b.className = 'chip' + (v === sec ? ' active' : '');
+    b.append(label);
+    if (n) { const k = document.createElement('b'); k.textContent = n; b.append(k); }
+    b.onclick = () => { S.settings.section = v; refresh(); };
+    box.append(b);
+  };
+  add(0, 'Все', dueCards(0).length);
+  Object.keys(SEC_NAMES).forEach((k) => add(+k, 'Раздел ' + k, dueCards(+k).length));
+  $('#secName').textContent = sec ? `${sec}. ${SEC_NAMES[sec]}` : 'Все разделы вместе';
 }
 function renderCards() {
   const q = $('#search').value.trim().toLowerCase();
@@ -170,9 +201,7 @@ $('#search').addEventListener('input', renderCards);
 /* ---------- игра ---------- */
 let G = null;
 function startGame(practice) {
-  let q = practice
-    ? (S.cards.some((c) => c.seen) ? S.cards.filter((c) => c.seen) : S.cards).slice().sort((a, b) => a.ease - b.ease || Math.random() - .5).slice(0, 10)
-    : dueCards().slice(0, 10);
+  let q = practice ? practiceCards(curSec()) : dueCards(curSec()).slice(0, 10);
   if (!q.length) return;
   G = { q, total: q.length, i: 0, hearts: 3, combo: 0, bestCombo: 0, xp: 0, right: 0, wrong: 0, practice, lvl: level(S.stats.xp) };
   $('#game').hidden = false; $('#gResult').hidden = true;
@@ -240,7 +269,8 @@ function finish() {
   r.append(h);
   lines.forEach((t) => { const p = document.createElement('div'); p.className = 'stat'; p.textContent = t; r.append(p); });
   const again = document.createElement('button'); again.className = 'primary'; again.textContent = 'Ещё раунд';
-  again.onclick = () => { closeGame(); if (dueCards().length) startGame(false); };
+  const wasPractice = G.practice;
+  again.onclick = () => { closeGame(); if (wasPractice || dueCards(curSec()).length) startGame(wasPractice); };
   const home = document.createElement('button'); home.className = 'ghost'; home.textContent = 'На главную';
   home.onclick = closeGame;
   r.append(again, home);
