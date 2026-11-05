@@ -31,15 +31,16 @@
 <main>
   <!-- ГЛАВНАЯ -->
   <section id="tab-home" class="tab active">
-    <div id="reminder" class="banner" hidden></div>
     <div class="panel big">
-      <div id="secChips" class="chips"></div>
-      <div id="secName" class="muted small"></div>
       <div class="due-num"><span id="dueCount">0</span></div>
       <div class="muted">карточек на сегодня</div>
-      <div class="muted small" id="dueSplit"></div>
-      <button id="playBtn" class="primary">▶ Играть</button>
-      <button id="practiceBtn" class="ghost">Потренироваться сверх плана</button>
+      <div class="today" id="dueSplit"></div>
+      <button id="playBtn" class="primary">▶ Повторить на сегодня</button>
+    </div>
+
+    <div class="panel">
+      <h3>Выбрать тему</h3>
+      <div id="topics"></div>
     </div>
 
     <div class="panel">
@@ -109,6 +110,17 @@
       <button data-g="3" class="g3">Легко<small></small></button>
     </div>
     <div id="gResult" hidden></div>
+  </div>
+</div>
+
+<!-- ВЫБОР ПОВТОРЕНИЯ / ПРАКТИКИ -->
+<div id="sheet" class="sheetwrap" hidden>
+  <div class="sheet">
+    <button id="shClose" class="x" aria-label="Закрыть">✕</button>
+    <h3 id="shTitle"></h3>
+    <div id="shInfo" class="muted small"></div>
+    <button id="shRepeat" class="primary"></button>
+    <button id="shPractice" class="ghost"></button>
   </div>
 </div>
 

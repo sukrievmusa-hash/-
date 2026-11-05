@@ -53,16 +53,24 @@ const SEC_NAMES = window.BUILTIN_SECTIONS || {};
 const SEC_BY_LECTURE = {};
 (window.BUILTIN_LECTURES || []).forEach((l) => { SEC_BY_LECTURE['b-' + l.id] = l.section; });
 const sectionOf = (c) => SEC_BY_LECTURE[c.lecture] || 0;
-const curSec = () => { const v = +S.settings.section || 0; return SEC_NAMES[v] ? v : 0; };
-const inSec = (c, sec) => !sec || sectionOf(c) === sec;
-function dueCards(sec = 0) {
+const LECS = (window.BUILTIN_LECTURES || []).map((l) => ({ id: 'b-' + l.id, section: l.section, title: l.title }));
+const lecLabel = (t) => t.split('. ')[0];            // «Лекция 1»
+const lecTopic = (t) => t.split('. ').slice(1).join('. '); // «Матрицы и определители»
+const ALL = { t: 'all' };
+const inScope = (c, sc) => (!sc || sc.t === 'all') ? true : sc.t === 'sec' ? sectionOf(c) === sc.id : c.lecture === sc.id;
+function scopeTitle(sc) {
+  if (!sc || sc.t === 'all') return 'Все темы';
+  if (sc.t === 'sec') return `Раздел ${sc.id}. ${SEC_NAMES[sc.id]}`;
+  return (LECS.find((l) => l.id === sc.id) || {}).title || '';
+}
+function dueCards(sc = ALL) {
   const now = Date.now();
-  const rev = S.cards.filter((c) => inSec(c, sec) && c.seen && c.due <= now).sort((a, b) => a.due - b.due);
-  const fresh = S.cards.filter((c) => inSec(c, sec) && !c.seen).slice(0, newLeft());
+  const rev = S.cards.filter((c) => inScope(c, sc) && c.seen && c.due <= now).sort((a, b) => a.due - b.due);
+  const fresh = S.cards.filter((c) => inScope(c, sc) && !c.seen).slice(0, newLeft());
   return rev.concat(fresh);
 }
-function practiceCards(sec = 0) {
-  return S.cards.filter((c) => inSec(c, sec))
+function practiceCards(sc = ALL) {
+  return S.cards.filter((c) => inScope(c, sc))
     .map((c) => [c, (c.seen ? c.ease : 2.6) + Math.random() * 0.6]) // слабые карточки чаще, остальное вперемешку
     .sort((a, b) => a[1] - b[1]).slice(0, 10).map((x) => x[0]);
 }
@@ -117,25 +125,22 @@ function refresh() {
   $('#hLevel').textContent = level(S.stats.xp);
   $('#hXp').textContent = S.stats.xp;
 
-  const sec = curSec();
-  renderChips();
-  const dl = dueCards(sec), due = dl.length, nNew = dl.filter((c) => !c.seen).length;
+  const dl = dueCards(ALL), due = dl.length;
   $('#dueCount').textContent = due;
-  $('#dueSplit').textContent = due ? `повторить: ${due - nNew} · новых: ${nNew}` : (S.cards.some((c) => inSec(c, sec) && !c.seen) ? 'Новые карточки откроются завтра' : '');
+  const by = {}; dl.forEach((c) => { by[c.lecture] = (by[c.lecture] || 0) + 1; });
+  const parts = LECS.filter((l) => by[l.id]).map((l) => `${lecLabel(l.title)} · ${by[l.id]}`);
+  $('#dueSplit').textContent = parts.length
+    ? 'Сегодня: ' + parts.slice(0, 4).join(', ') + (parts.length > 4 ? ` и ещё ${parts.length - 4}` : '')
+    : (S.cards.some((c) => !c.seen) ? 'Новые карточки откроются завтра' : 'На сегодня всё повторено ✓');
   $('#playBtn').disabled = due === 0;
-  const pc = S.cards.filter((c) => inSec(c, sec)).length;
-  $('#practiceBtn').disabled = pc === 0;
-  $('#practiceBtn').textContent = sec ? `Практика: раздел ${sec}` : 'Практика по всем разделам';
   $('#playBtn').style.opacity = due === 0 ? .5 : 1;
+  renderTopics();
+  if (!$('#sheet').hidden) refreshSheet();
 
   const done = S.stats.log[dayKey()] || 0;
   const goal = S.settings.goal;
   $('#goalBar').style.width = Math.min(100, done / goal * 100) + '%';
   $('#goalText').textContent = `${done} из ${goal} карточек${done >= goal ? ' — цель выполнена! 🎉' : ''}`;
-
-  const rem = $('#reminder');
-  rem.hidden = due === 0;
-  rem.textContent = `Пора повторять: ${due} ${plural(due)}`;
 
   // прогноз на 7 дней
   const f = $('#forecast'); f.innerHTML = '';
@@ -143,7 +148,7 @@ function refresh() {
   const counts = [];
   for (let i = 0; i < 7; i++) {
     const a = start.getTime() + i * DAY, b = a + DAY;
-    counts.push(i === 0 ? due : S.cards.filter((c) => inSec(c, sec) && c.seen && c.due >= a && c.due < b).length);
+    counts.push(i === 0 ? due : S.cards.filter((c) => c.seen && c.due >= a && c.due < b).length);
   }
   const max = Math.max(1, ...counts);
   counts.forEach((n, i) => {
@@ -163,20 +168,69 @@ function streakNow() {
   const y = dayKey(new Date(Date.now() - DAY));
   return (l === dayKey() || l === y) ? S.stats.streak : 0;
 }
-function renderChips() {
-  const box = $('#secChips'); box.innerHTML = '';
-  const sec = curSec();
-  const add = (v, label, n) => {
-    const b = document.createElement('button'); b.className = 'chip' + (v === sec ? ' active' : '');
-    b.append(label);
-    if (n) { const k = document.createElement('b'); k.textContent = n; b.append(k); }
-    b.onclick = () => { S.settings.section = v; refresh(); };
-    box.append(b);
-  };
-  add(0, 'Все', dueCards(0).length);
-  Object.keys(SEC_NAMES).forEach((k) => add(+k, 'Раздел ' + k, dueCards(+k).length));
-  $('#secName').textContent = sec ? `${sec}. ${SEC_NAMES[sec]}` : 'Все разделы вместе';
+function scopeStats(sc) {
+  const all = S.cards.filter((c) => inScope(c, sc)), now = Date.now();
+  const seen = all.filter((c) => c.seen).length;
+  const rev = all.filter((c) => c.seen && c.due <= now).length;
+  const fresh = Math.min(all.length - seen, newLeft());
+  return { total: all.length, seen, rev, fresh, due: rev + fresh };
 }
+let openSec = 0;
+function renderTopics() {
+  const box = $('#topics'); box.innerHTML = '';
+  const secs = Object.keys(SEC_NAMES).map(Number);
+  if (!openSec) openSec = secs.find((k) => dueCards({ t: 'sec', id: k }).length) || secs[0] || 0;
+  const pill = (st) => { // число — сколько карточек пора ПОВТОРИТЬ; «новое» — есть неизученные; ✓ — всё в порядке
+    const p = document.createElement('span');
+    p.className = 'pill' + (st.rev || st.fresh ? '' : ' zero') + (!st.rev && st.fresh ? ' new' : '');
+    p.textContent = st.rev ? st.rev : st.fresh ? 'новое' : '✓';
+    return p;
+  };
+  const row = (label, topic, sc, cls) => {
+    const st = scopeStats(sc);
+    const b = document.createElement('button'); b.className = 'lecrow ' + (cls || '');
+    const t = document.createElement('div'); t.className = 't';
+    const l1 = document.createElement('b'); l1.textContent = label;
+    t.append(l1);
+    if (topic) { const l2 = document.createElement('span'); l2.textContent = topic; t.append(l2); }
+    const l3 = document.createElement('span'); l3.textContent = `изучено ${st.seen} из ${st.total}` + (st.rev ? ` · пора повторить: ${st.rev}` : ''); t.append(l3);
+    const mini = document.createElement('div'); mini.className = 'mini'; const i = document.createElement('i'); i.style.width = (st.total ? st.seen / st.total * 100 : 0) + '%'; mini.append(i); t.append(mini);
+    b.append(t, pill(st)); b.onclick = () => openSheet(sc); return b;
+  };
+  secs.forEach((k) => {
+    const sc = { t: 'sec', id: k };
+    const wrap = document.createElement('div'); wrap.className = 'sec' + (openSec === k ? ' open' : '');
+    const head = document.createElement('button'); head.className = 'sechead';
+    const ar = document.createElement('span'); ar.className = 'arrow'; ar.textContent = '▸';
+    const nm = document.createElement('span'); nm.className = 'name'; nm.textContent = `Раздел ${k}. ${SEC_NAMES[k]}`;
+    head.append(ar, nm, pill(scopeStats(sc)));
+    head.onclick = () => { openSec = openSec === k ? -1 : k; renderTopics(); };
+    const body = document.createElement('div'); body.className = 'lecs';
+    body.append(row('Весь раздел', '', sc, 'all'));
+    LECS.filter((l) => l.section === k).forEach((l) => body.append(row(lecLabel(l.title), lecTopic(l.title), { t: 'lec', id: l.id })));
+    wrap.append(head, body); box.append(wrap);
+  });
+}
+
+/* ---------- выбор: повторить или практика ---------- */
+let sheetScope = null;
+function openSheet(sc) { sheetScope = sc; refreshSheet(); $('#sheet').hidden = false; }
+function closeSheet() { $('#sheet').hidden = true; }
+function refreshSheet() {
+  const sc = sheetScope, all = S.cards.filter((c) => inScope(c, sc));
+  const st = scopeStats(sc), due = st.due;
+  $('#shTitle').textContent = scopeTitle(sc);
+  $('#shInfo').textContent = `Изучено ${st.seen} из ${st.total}. Сегодня: повторить ${st.rev}, новых ${st.fresh}`;
+  $('#shRepeat').disabled = !due;
+  $('#shRepeat').textContent = due ? `▶ Повторить (${due})` : 'На сегодня всё повторено ✓';
+  $('#shPractice').textContent = `Практика (${Math.min(10, all.length)} карточек)`;
+  $('#shPractice').disabled = !all.length;
+}
+$('#shClose').onclick = closeSheet;
+$('#sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') closeSheet(); });
+$('#shRepeat').onclick = () => { const sc = sheetScope; closeSheet(); startGame(false, sc); };
+$('#shPractice').onclick = () => { const sc = sheetScope; closeSheet(); startGame(true, sc); };
+
 function renderCards() {
   const q = $('#search').value.trim().toLowerCase();
   const box = $('#cardList'); box.innerHTML = '';
@@ -200,10 +254,10 @@ $('#search').addEventListener('input', renderCards);
 /* ---------- добавление данных ---------- */
 /* ---------- игра ---------- */
 let G = null;
-function startGame(practice) {
-  let q = practice ? practiceCards(curSec()) : dueCards(curSec()).slice(0, 10);
+function startGame(practice, sc = ALL) {
+  let q = practice ? practiceCards(sc) : dueCards(sc).slice(0, 10);
   if (!q.length) return;
-  G = { q, total: q.length, i: 0, hearts: 3, combo: 0, bestCombo: 0, xp: 0, right: 0, wrong: 0, practice, lvl: level(S.stats.xp) };
+  G = { q, total: q.length, i: 0, hearts: 3, combo: 0, bestCombo: 0, xp: 0, right: 0, wrong: 0, practice, scope: sc, lvl: level(S.stats.xp) };
   $('#game').hidden = false; $('#gResult').hidden = true;
   $('.flash').hidden = false;
   nextCard();
@@ -215,7 +269,7 @@ function nextCard() {
   hearts();
   $('#gBar').style.width = (Math.min(G.i, G.total) / G.total * 100) + '%';
   $('#gCombo').textContent = G.combo >= 2 ? `🔥 комбо ×${G.combo}` : '';
-  $('#gLecture').textContent = lectureName(c.lecture);
+  $('#gLecture').textContent = (G.practice ? 'Практика · ' : 'Повторение · ') + lectureName(c.lecture);
   setText($('#gQ'), c.q);
   setText($('#gA'), c.a);
   $('#gA').hidden = true; $('#gShow').hidden = false; $('#gGrades').hidden = true;
@@ -269,8 +323,8 @@ function finish() {
   r.append(h);
   lines.forEach((t) => { const p = document.createElement('div'); p.className = 'stat'; p.textContent = t; r.append(p); });
   const again = document.createElement('button'); again.className = 'primary'; again.textContent = 'Ещё раунд';
-  const wasPractice = G.practice;
-  again.onclick = () => { closeGame(); if (wasPractice || dueCards(curSec()).length) startGame(wasPractice); };
+  const wasPractice = G.practice, sc = G.scope;
+  again.onclick = () => { closeGame(); if (wasPractice || dueCards(sc).length) startGame(wasPractice, sc); };
   const home = document.createElement('button'); home.className = 'ghost'; home.textContent = 'На главную';
   home.onclick = closeGame;
   r.append(again, home);
@@ -281,8 +335,7 @@ function closeGame() {
   G = null; $('#game').hidden = true; $('.flash').hidden = false; refresh();
 }
 $('#gClose').onclick = closeGame;
-$('#playBtn').onclick = () => startGame(false);
-$('#practiceBtn').onclick = () => startGame(true);
+$('#playBtn').onclick = () => startGame(false, ALL);
 
 /* ---------- настройки ---------- */
 $('#goalInput').value = S.settings.goal;

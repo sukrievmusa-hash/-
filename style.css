@@ -65,8 +65,30 @@ button.primary,button.ghost,button.danger,.filebtn{display:inline-block;border-r
 .pop{animation:pop .35s}
 @keyframes pop{0%{transform:scale(.9);opacity:.4}100%{transform:scale(1);opacity:1}}
 
-.chips{display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-bottom:6px}
-.chip{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:6px 9px;font-size:13px;white-space:nowrap}
-.chip b{display:inline-block;min-width:18px;margin-left:3px;padding:0 5px;border-radius:9px;background:var(--line);color:var(--muted);font-size:12px;line-height:18px}
-.chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
-.chip.active b{background:rgba(255,255,255,.25);color:#fff}
+
+.today{margin-top:6px;font-size:14px;color:var(--text)}
+.sec{border-bottom:1px solid var(--line)}
+.sec:last-child{border:0}
+.sechead,.lecrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;color:var(--text);border:0;padding:12px 2px}
+.sechead{font-weight:600;font-size:15px}
+.sechead .arrow{color:var(--muted);transition:transform .2s;display:inline-block}
+.sec.open .arrow{transform:rotate(90deg)}
+.sechead .name{flex:1}
+.pill{background:var(--accent);color:#fff;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600}
+.pill.zero{background:var(--line);color:var(--muted)}
+.lecs{display:none;padding:0 0 8px 18px}
+.sec.open .lecs{display:block}
+.lecrow{padding:10px 10px;margin:4px 0;background:var(--bg);border:1px solid var(--line);border-radius:12px}
+.lecrow .t{flex:1;min-width:0}
+.lecrow .t b{display:block;font-size:15px}
+.lecrow .t span{display:block;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.lecrow .mini{height:5px;background:var(--line);border-radius:3px;margin-top:6px;overflow:hidden}
+.lecrow .mini i{display:block;height:100%;background:var(--good)}
+.lecrow.all{border-style:dashed}
+.sheetwrap{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.sheet{position:relative;width:100%;max-width:640px;background:var(--panel);border-radius:20px 20px 0 0;padding:22px 16px 26px}
+.sheet h3{margin:0 28px 4px 0;font-size:18px}
+.sheet .x{position:absolute;right:10px;top:10px}
+.sheet .primary,.sheet .ghost{display:block;width:100%;margin:12px 0 0;padding:14px;font-size:16px}
+.sheet .primary:disabled{opacity:.5}
+.pill.new{background:var(--good);color:#06281a}
