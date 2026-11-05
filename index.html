@@ -24,7 +24,6 @@
 
 <nav class="tabs">
   <button data-tab="home" class="active">Главная</button>
-  <button data-tab="lectures">Лекции</button>
   <button data-tab="cards">Карточки</button>
   <button data-tab="settings">Настройки</button>
 </nav>
@@ -52,34 +51,6 @@
       <div id="forecast" class="forecast"></div>
     </div>
 
-    <div class="panel" id="emptyHint" hidden>
-      <h3>Пока пусто</h3>
-      <p class="muted">Добавьте лекцию и карточки во вкладке «Лекции» — или загрузите пример, чтобы посмотреть, как всё работает.</p>
-      <button id="seedBtn" class="ghost">Загрузить пример</button>
-    </div>
-  </section>
-
-  <!-- ЛЕКЦИИ -->
-  <section id="tab-lectures" class="tab">
-    <div class="panel">
-      <h3>1. Новая лекция</h3>
-      <input id="lecTitle" placeholder="Название, например: Лекция 3. Пределы">
-      <textarea id="lecNotes" rows="4" placeholder="Конспект или текст лекции (необязательно, для себя)"></textarea>
-      <button id="addLecture" class="primary">Добавить лекцию</button>
-    </div>
-
-    <div class="panel">
-      <h3>2. Добавить карточки</h3>
-      <select id="cardLecture"></select>
-      <textarea id="bulk" rows="7" placeholder="Одна карточка — одна строка:&#10;вопрос ;; ответ&#10;&#10;Формулы пишите между $ $:&#10;Чему равен $\lim_{x\to0}\frac{\sin x}{x}$? ;; $1$&#10;Определение производной ;; $f'(x)=\lim_{h\to0}\frac{f(x+h)-f(x)}{h}$"></textarea>
-      <button id="addCards" class="primary">Добавить карточки</button>
-      <p class="muted small">Совет: отправьте лекции Claude — он превратит их в готовые строки «вопрос ;; ответ», останется вставить сюда.</p>
-    </div>
-
-    <div class="panel">
-      <h3>Мои лекции</h3>
-      <div id="lectureList"></div>
-    </div>
   </section>
 
   <!-- КАРТОЧКИ -->

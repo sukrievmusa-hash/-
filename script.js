@@ -110,7 +110,6 @@ function refresh() {
   $('#dueSplit').textContent = due ? `повторить: ${due - nNew} · новых: ${nNew}` : (S.cards.some((c) => !c.seen) ? 'Новые карточки откроются завтра' : '');
   $('#playBtn').disabled = due === 0;
   $('#playBtn').style.opacity = due === 0 ? .5 : 1;
-  $('#emptyHint').hidden = S.cards.length > 0;
 
   const done = S.stats.log[dayKey()] || 0;
   const goal = S.settings.goal;
@@ -136,29 +135,6 @@ function refresh() {
     const bar = document.createElement('i'); bar.style.height = (n / max * 60) + 'px';
     col.append(bar, document.createTextNode(n + ' · ' + (i === 0 ? 'сег' : d.toLocaleDateString('ru', { weekday: 'short' }))));
     f.append(col);
-  });
-
-  // лекции
-  const sel = $('#cardLecture'); const prev = sel.value; sel.innerHTML = '';
-  if (!S.lectures.length) sel.append(new Option('Сначала добавьте лекцию', ''));
-  S.lectures.forEach((l) => sel.append(new Option(l.title, l.id)));
-  if (prev) sel.value = prev;
-
-  const ll = $('#lectureList'); ll.innerHTML = '';
-  if (!S.lectures.length) ll.innerHTML = '<span class="muted">Лекций пока нет.</span>';
-  S.lectures.forEach((l) => {
-    const n = S.cards.filter((c) => c.lecture === l.id);
-    const row = document.createElement('div'); row.className = 'item';
-    const t = document.createElement('div'); t.className = 't';
-    t.textContent = l.title;
-    const bd = document.createElement('div'); bd.className = 'badge';
-    bd.textContent = `изучено ${n.filter((c) => c.seen).length} из ${n.length} · к повтору: ${n.filter((c) => c.seen && c.due <= Date.now()).length}`;
-    t.append(bd);
-    const del = document.createElement('button'); del.textContent = 'Удалить';
-    del.onclick = () => { if (confirm('Удалить лекцию и все её карточки?')) {
-      S.lectures = S.lectures.filter((x) => x.id !== l.id);
-      S.cards = S.cards.filter((c) => c.lecture !== l.id); refresh(); } };
-    row.append(t, del); ll.append(row);
   });
 
   renderCards();
@@ -191,40 +167,6 @@ function renderCards() {
 $('#search').addEventListener('input', renderCards);
 
 /* ---------- добавление данных ---------- */
-$('#addLecture').onclick = () => {
-  const title = $('#lecTitle').value.trim();
-  if (!title) return alert('Введите название лекции');
-  S.lectures.push({ id: uid(), title, notes: $('#lecNotes').value.trim(), created: Date.now() });
-  $('#lecTitle').value = ''; $('#lecNotes').value = ''; refresh();
-};
-$('#addCards').onclick = () => {
-  const lec = $('#cardLecture').value;
-  if (!lec) return alert('Сначала создайте и выберите лекцию');
-  let n = 0;
-  $('#bulk').value.split('\n').forEach((line) => {
-    const i = line.indexOf(';;');
-    if (i < 0) return;
-    const q = line.slice(0, i).trim(), a = line.slice(i + 2).trim();
-    if (!q || !a) return;
-    S.cards.push({ id: uid(), lecture: lec, q, a, ease: 2.5, interval: 0, reps: 0, lapses: 0, due: Date.now(), created: Date.now(), seen: false });
-    n++;
-  });
-  if (!n) return alert('Не нашёл ни одной строки вида «вопрос ;; ответ»');
-  $('#bulk').value = ''; refresh(); alert('Добавлено карточек: ' + n);
-};
-$('#seedBtn').onclick = () => {
-  const id = uid();
-  S.lectures.push({ id, title: 'Пример: пределы и производные', notes: '', created: Date.now() });
-  [
-    ['Чему равен $\\lim_{x\\to0}\\frac{\\sin x}{x}$?', '$1$'],
-    ['Производная $x^n$', '$n x^{n-1}$'],
-    ['Определение производной', "$f'(x)=\\lim_{h\\to0}\\frac{f(x+h)-f(x)}{h}$"],
-    ['Производная $e^x$', '$e^x$'],
-    ['Чему равен $\\int x\\,dx$?', '$\\frac{x^2}{2}+C$']
-  ].forEach(([q, a]) => S.cards.push({ id: uid(), lecture: id, q, a, ease: 2.5, interval: 0, reps: 0, lapses: 0, due: Date.now(), created: Date.now(), seen: false }));
-  refresh();
-};
-
 /* ---------- игра ---------- */
 let G = null;
 function startGame(practice) {
