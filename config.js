@@ -4,6 +4,6 @@ window.MR_CONFIG = {
   site: 'https://sukrievmusa-hash.github.io/-/',
   // номер Kaspi для кнопки «Поддержать автора»; пустая строка скрывает номер
   kaspi: '8 707 526 94 42',
-  // адрес сервера Telegram-бота (см. backend/README.md); пока пусто — блок Telegram на сайте скрыт
-  api: ''
+  // адрес сервера Telegram-бота (см. backend/README.md); пустая строка скрывает блок Telegram на сайте
+  api: 'https://cmlimfcvhygwogfgbwjz.supabase.co/functions/v1/mathrepeat'
 };
