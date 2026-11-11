@@ -1,10 +1,10 @@
 [hidden]{display:none!important}
 :root{
-  --bg:#0f1220;--panel:#181c30;--line:#272c47;--text:#e9ecf8;--muted:#8d94b5;
-  --accent:#6c7bff;--good:#35c486;--warn:#f5b84b;--bad:#ef5b6b;
+  --bg:#14171f;--panel:#1c2029;--line:#2c323f;--text:#e8eaf0;--muted:#9097a8;
+  --accent:#4f72c4;--good:#4aa57e;--warn:#d9a441;--bad:#d9626e;
 }
 @media (prefers-color-scheme:light){
-  :root{--bg:#f3f4fb;--panel:#fff;--line:#dfe2f2;--text:#1c2038;--muted:#6a7094}
+  :root{--bg:#f5f6f8;--panel:#fff;--line:#e1e4ea;--text:#1d2230;--muted:#5f6a82;--accent:#2f4f9b;--good:#2f8a64;--warn:#b7822a;--bad:#c4485a}
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
@@ -176,15 +176,15 @@ button.primary,button.ghost,button.danger,.filebtn{display:inline-block;border-r
 .goalrow .muted{margin-top:4px}
 .opts{display:grid;gap:8px;margin-bottom:10px}
 .opt{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:13px 12px;font-size:17px;text-align:center;overflow-x:auto}
-.opt.right{border-color:var(--good);background:rgba(53,196,134,.16)}
-.opt.wrong{border-color:var(--bad);background:rgba(239,91,107,.16)}
+.opt.right{border-color:var(--good);background:color-mix(in srgb,var(--good) 16%,transparent)}
+.opt.wrong{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 16%,transparent)}
 .opt:disabled{cursor:default;color:var(--text);opacity:1}
 .grades.three{grid-template-columns:repeat(3,1fr)}
 .toprow{display:flex;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid var(--line)}
 .toprow:last-of-type{border:0}
 .toprow .place{width:30px;text-align:center;font-weight:700}
 .toprow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.toprow.me{background:rgba(108,123,255,.14);border-radius:10px;border-bottom-color:transparent}
+.toprow.me{background:color-mix(in srgb,var(--accent) 14%,transparent);border-radius:10px;border-bottom-color:transparent}
 #tab-top .primary{display:block;width:100%;margin-top:10px;padding:13px}
 #topMe .row input{width:auto}
 
@@ -192,3 +192,22 @@ button.primary,button.ghost,button.danger,.filebtn{display:inline-block;border-r
 .lsblock.ask{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--panel))}
 #lsAll{display:block;margin:4px auto 10px}
 .fig .dotb{fill:var(--bad);stroke:none}.fig .dotn{fill:currentColor;opacity:.3;stroke:none}
+
+/* v16: спокойный вид */
+.panel{border-radius:10px}
+button.primary,button.ghost,button.danger,.filebtn{border-radius:8px}
+.tabs button{border-radius:8px;font-size:13px;padding:8px 4px}
+.tabs button.active{background:var(--accent)}
+.bar>div{background:var(--accent)}
+.due-num{font-weight:700}
+.brand{letter-spacing:.01em}
+.flash{border-radius:12px}
+.grades button{border-radius:8px}
+.weakrow{background:color-mix(in srgb,var(--bad) 10%,transparent);border-radius:8px}
+.weakrow.mid{background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.weakrow button{border-radius:8px}
+.weak{background:color-mix(in srgb,var(--bad) 10%,transparent)}
+#playFull{display:block;width:100%;text-align:center;margin-top:6px;font-size:14px}
+#gHearts{font-size:13px;color:var(--muted);letter-spacing:0;white-space:nowrap}
+#openCards{display:block;margin:0 0 4px}
+#weakHome .ghost{display:block;width:100%;margin-top:10px;padding:12px}

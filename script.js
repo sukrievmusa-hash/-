@@ -152,9 +152,9 @@ function refresh() {
   const parts = LECS.filter((l) => by[l.id]).map((l) => `${lecLabel(l.title)} · ${by[l.id]}`);
   $('#dueSplit').textContent = parts.length
     ? 'Сегодня: ' + parts.slice(0, 4).join(', ') + (parts.length > 4 ? ` и ещё ${parts.length - 4}` : '')
-    : (S.cards.some((c) => !c.seen) ? 'На сегодня всё повторено ✓ Норма новых карточек выполнена' : 'На сегодня всё повторено ✓');
+    : (S.cards.some((c) => !c.seen) ? 'На сегодня всё повторено Норма новых карточек выполнена' : 'На сегодня всё повторено');
   const more = extraNewCards(ALL).length, n = due || more || S.cards.length;
-  $('#playBtn').textContent = due ? '⚡ Быстрый раунд' : more ? '⚡ Выучить 5 новых карточек' : '⚡ Быстрая практика';
+  $('#playBtn').textContent = due ? 'Быстрый раунд' : more ? 'Выучить 5 новых карточек' : 'Быстрая практика';
   $('#playBtn').disabled = !S.cards.length;
   $('#playHint').textContent = `${Math.min(QUICK, n)} ${plural(Math.min(QUICK, n))} · примерно 3 минуты`;
   $('#playFull').hidden = n <= QUICK;
@@ -230,13 +230,13 @@ function renderWeakHome() {
   const text = (t) => { const d = document.createElement('div'); d.className = 'muted small'; d.textContent = t; box.append(d); };
   const btn = (cls, t, fn) => { const b = document.createElement('button'); b.className = cls; b.textContent = t; b.onclick = fn; box.append(b); return b; };
   if (!rows.length) {
-    text('Не знаете, какие темы у вас проседают? Короткий тест — по 2 вопроса из каждой лекции и уточняющие там, где результат спорный, — покажет, где пробелы.');
-    btn('primary', '🔍 Найти слабые места · 5–7 минут', startDiag);
+    text('Короткий тест покажет, какие темы проседают.');
+    btn('ghost', 'Найти слабые места · 5–7 минут', startDiag);
     return;
   }
   if (!weak.length) {
     const lo = rows[0];
-    text(`Явных пробелов не видно 👍 Ниже всего: ${lo.l.title} — уверенных ответов ${Math.round(lo.st.sure * 100)}%.`);
+    text(`Явных пробелов не видно. Ниже всего: ${lo.l.title} — уверенных ответов ${Math.round(lo.st.sure * 100)}%.`);
   }
   weak.forEach((x) => {
     const r = document.createElement('div'); r.className = 'weakrow' + (x.st.sure >= 0.5 ? ' mid' : '');
@@ -244,7 +244,7 @@ function renderWeakHome() {
     const b = document.createElement('b'); b.textContent = x.l.title;
     const sp = document.createElement('span'); sp.textContent = `уверенных ответов ${Math.round(x.st.sure * 100)}% (из ${x.st.answers})`;
     t.append(b, sp);
-    const go = document.createElement('button'); go.textContent = '🎯 Подтянуть'; go.onclick = () => openSheet(x.sc);
+    const go = document.createElement('button'); go.textContent = 'Подтянуть'; go.onclick = () => openSheet(x.sc);
     r.append(t, go); box.append(r);
   });
   btn('linkbtn', S.diag ? `Пройти диагностику заново (последняя: ${new Date(S.diag.day + 'T12:00').toLocaleDateString('ru', { day: 'numeric', month: 'long' })})` : 'Проверить все лекции: диагностика 5–7 минут', startDiag);
@@ -338,17 +338,17 @@ function renderLesson() {
   };
   const mine = L.card && L.i === L.cardIdea; // тема, которая объясняет вопрос с карточки
   if (mine) {
-    const d = add('ask', '❓ Ваш вопрос', L.card.q);
+    const d = add('ask', 'Ваш вопрос', L.card.q);
     const a = document.createElement('div'); a.className = 'lsans'; a.textContent = 'Ответ: ' + L.card.a; d.append(a);
     const n = document.createElement('div'); n.className = 'muted small'; n.style.marginTop = '8px'; n.textContent = 'Ниже — тема, из которой получается этот ответ.'; d.append(n);
   }
   const h = document.createElement('h2'); h.textContent = it.t; box.append(h);
-  if (full && it.a) add('analogy', '👋 На пальцах', it.a);
+  if (full && it.a) add('analogy', 'На пальцах', it.a);
   if (it.fig && window.LESSON_FIGS[it.fig]) { const f = document.createElement('div'); f.className = 'lsfig'; f.innerHTML = window.LESSON_FIGS[it.fig](); box.append(f); }
-  add('core', '🎯 Суть', it.s);
+  add('core', 'Суть', it.s);
   if (it.m) add('', '', it.m);
   if (it.ex) {
-    const e = add('example', '✏️ Пример', it.ex.q);
+    const e = add('example', 'Пример', it.ex.q);
     if (full && it.ex.steps) {
       const ol = document.createElement('ol');
       it.ex.steps.forEach((st) => { const li = document.createElement('li'); li.textContent = st; ol.append(li); });
@@ -356,11 +356,11 @@ function renderLesson() {
     }
     const a = document.createElement('div'); a.className = 'lsans'; a.textContent = 'Ответ: ' + it.ex.a; e.append(a);
   }
-  if (full && it.w) add('warn', '⚠️ Частая ошибка', it.w);
+  if (full && it.w) add('warn', 'Частая ошибка', it.w);
   renderMath(box);
   const last = L.i === ideas.length - 1;
   $('#lsPrev').disabled = L.i === 0;
-  $('#lsNext').textContent = mine ? 'Понятно, вернуться к карточке' : !last ? 'Дальше →' : L.from === 'game' ? 'Вернуться к карточке' : '✅ Закрепить: 5 карточек';
+  $('#lsNext').textContent = mine ? 'Понятно, вернуться к карточке' : !last ? 'Дальше →' : L.from === 'game' ? 'Вернуться к карточке' : 'Закрепить: 5 карточек';
   $('#lsAll').hidden = !mine || ideas.length < 2;
   $('#lesson').scrollTop = 0;
 }
@@ -503,14 +503,14 @@ function diagExtend() {
   G.q.push(...more); G.total = G.q.length; G.extra2 = more.length;
   return true;
 }
-function hearts() { $('#gHearts').textContent = G.diag ? `${Math.min(G.i + 1, G.total)} из ${G.total}` : '❤️'.repeat(G.hearts) + '🖤'.repeat(3 - G.hearts); }
+function hearts() { $('#gHearts').textContent = G.diag ? `${Math.min(G.i + 1, G.total)} из ${G.total}` : `Ошибок: ${3 - G.hearts} из 3`; }
 function nextCard() {
   if (G.diag && G.i >= G.q.length) diagExtend();
   if (G.i >= G.q.length || G.hearts <= 0) return finish();
   const c = G.q[G.i];
   hearts();
   $('#gBar').style.width = (Math.min(G.i, G.total) / G.total * 100) + '%';
-  $('#gCombo').textContent = G.combo >= 2 ? `🔥 комбо ×${G.combo}` : '';
+  $('#gCombo').textContent = G.combo >= 2 ? `Серия верных: ${G.combo}` : '';
   $('#gLecture').textContent = (G.diag ? 'Диагностика · ' : G.weak ? 'Слабые места · ' : G.practice ? 'Практика · ' : 'Повторение · ') + lectureName(c.lecture);
   setText($('#gQ'), c.q);
   setText($('#gA'), c.a);
@@ -585,13 +585,13 @@ function finishDiag(r) {
   const h = document.createElement('h2'); h.textContent = 'Диагностика готова';
   const weak = rows.filter((x) => x.p < 0.7), w = weak[0];
   const note = document.createElement('div'); note.className = 'note';
-  note.textContent = w ? `Слабее всего: ${w.l.title}` + (weak.length > 1 ? ` и ещё ${weak.length - 1}` : '') : 'Слабых мест не нашлось 👍 Продолжайте повторять по расписанию.';
+  note.textContent = w ? `Слабее всего: ${w.l.title}` + (weak.length > 1 ? ` и ещё ${weak.length - 1}` : '') : 'Слабых мест не нашлось. Продолжайте повторять по расписанию.';
   const list = document.createElement('div'); list.className = 'dres';
   rows.forEach((x) => list.append(prow(lecLabel(x.l.title), lecTopic(x.l.title), Math.round(x.p * 100) + '%', x.p, x.p < 0.5 ? 'var(--bad)' : x.p < 0.7 ? 'var(--warn)' : 'var(--good)')));
   const xp = document.createElement('div'); xp.className = 'muted small'; xp.textContent = (G.extra2 ? `Задано ${G.extra2} уточняющих вопроса по спорным лекциям. ` : '') + `+${G.xp} XP · результат сохранён на главной в блоке «Ваша слабая сторона»`;
   r.append(h, note, list, xp);
   if (w) {
-    const go = document.createElement('button'); go.className = 'primary'; go.textContent = `🎯 Подтянуть: ${lecLabel(w.l.title)}`;
+    const go = document.createElement('button'); go.className = 'primary'; go.textContent = `Подтянуть: ${lecLabel(w.l.title)}`;
     go.onclick = () => { closeGame(); openSheet({ t: 'lec', id: w.l.id }); };
     r.append(go);
   }
@@ -608,10 +608,10 @@ function finish() {
   const h = document.createElement('h2');
   h.textContent = G.hearts <= 0 ? 'Жизни закончились 💔' : 'Раунд пройден! 🎉';
   const lines = [
-    `+${G.xp} XP${up ? ` · новый уровень ${lvl}! ⭐` : ''}`,
+    `+${G.xp} XP${up ? ` · новый уровень ${lvl}` : ''}`,
     `Верно: ${G.right} · Ошибок: ${G.wrong}`,
     `Лучшее комбо: ×${G.bestCombo}`,
-    `Серия: 🔥 ${streakNow()} дн`
+    `Серия: ${streakNow()} дн`
   ];
   r.append(h);
   lines.forEach((t) => { const p = document.createElement('div'); p.className = 'stat'; p.textContent = t; r.append(p); });
@@ -700,7 +700,7 @@ function renderTg() {
   $('#tgPanel').hidden = !on; $('#tgHome').hidden = !on || S.tg.linked;
   if (!on) return;
   $('#tgInfo').textContent = S.tg.linked
-    ? `✅ Telegram подключён. Бот напишет в ${String(S.tg.hour).padStart(2, '0')}:00, если есть что повторить. Время меняется командой /time в боте.`
+    ? `Telegram подключён. Бот напишет в ${String(S.tg.hour).padStart(2, '0')}:00, если есть что повторить. Время меняется командой /time в боте.`
     : 'Бот сам напишет, когда пора повторить: сколько карточек накопилось и какая тема проседает. Сайт держать открытым не нужно.';
   $('#tgBtn').textContent = S.tg.linked ? 'Открыть бота' : 'Подключить Telegram';
   $('#tgOff').hidden = !S.tg.linked; $('#tgSyncInfo').hidden = !S.tg.linked;
@@ -797,7 +797,7 @@ async function loadTop() {
       const row = document.createElement('div'); row.className = 'toprow' + (r.me ? ' me' : '');
       const pl = document.createElement('span'); pl.className = 'place'; pl.textContent = ['🥇', '🥈', '🥉'][r.place - 1] || r.place;
       const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = r.nick + (r.me ? ' (вы)' : '');
-      const st = document.createElement('span'); st.className = 'muted small'; st.textContent = r.streak ? `🔥 ${r.streak}` : '';
+      const st = document.createElement('span'); st.className = 'muted small'; st.textContent = r.streak ? `серия ${r.streak}` : '';
       const xp = document.createElement('b'); xp.textContent = r.week + ' XP';
       row.append(pl, nm, st, xp); list.append(row);
     });
@@ -848,3 +848,5 @@ function goHash() { // ссылка из напоминания (#go) сразу
 }
 window.addEventListener('hashchange', goHash);
 goHash();
+
+$('#openCards').onclick = () => $('.tabs button[data-tab="cards"]').click();
