@@ -3,6 +3,8 @@
 //   GET  /info   — имя бота для сайта
 //   POST /sync   — сайт присылает расписание и прогресс; в ответ может прийти прогресс с другого устройства
 //   POST /top    — рейтинг группы за 7 дней
+//   POST /join   — студент входит в класс по коду (или выходит)
+//   POST /teacher — кабинет преподавателя: классы и задания (по секретному коду)
 //   POST /bot    — вебхук Telegram (команды /start, /time, /status, /top, /stop, /on)
 //   POST /cron   — раз в час: разослать напоминания тем, у кого наступило их время
 //   POST /setup  — один раз после добавления токена: вебхук, имя и список команд
@@ -109,8 +111,14 @@ async function sync(b: Record<string, unknown>) {
       show_top = coalesce(${show}::boolean, show_top),
       updated_at = now()
     where chat_id = ${chat}::bigint
-    returning remind_hour, nick, show_top`;
+    returning remind_hour, nick, show_top, class_id`;
   const out: Record<string, unknown> = { linked: true, hour: rows[0].remind_hour, nick: rows[0].nick, show: rows[0].show_top, rev };
+  if (rows[0].class_id) {
+    const k = await sql`select name from mathrepeat.classes where id = ${rows[0].class_id}::int`;
+    const t = await sql`select id, lecture, title, note, to_char(due, 'YYYY-MM-DD') as due, to_char(created_at at time zone 'utc', 'YYYY-MM-DD') as day
+      from mathrepeat.assignments where class_id = ${rows[0].class_id}::int and created_at > now() - interval '30 days' order by created_at desc limit 10`;
+    out.cls = k[0]?.name ?? null; out.tasks = t;
+  }
 
   // прогресс: если на сервере версия новее той, что видело устройство, — отдаём её, устройство сольёт и пришлёт заново
   const base = int(b.base, 0, Number.MAX_SAFE_INTEGER, 0);
@@ -125,6 +133,68 @@ async function sync(b: Record<string, unknown>) {
     }
   }
   return json(out);
+}
+
+// ---------- классы и преподаватель ----------
+async function join(b: Record<string, unknown>) {
+  const id = String(b.id ?? "");
+  if (!UUID.test(id)) return json({ error: "bad id" }, 400);
+  const who = await sql`select chat_id from mathrepeat.devices where device_id = ${id}::text`;
+  if (!who.length) return json({ linked: false });
+  if (b.leave) {
+    await sql`update mathrepeat.people set class_id = null where chat_id = ${who[0].chat_id}::bigint`;
+    return json({ linked: true, cls: null });
+  }
+  const code = String(b.code ?? "").trim().toUpperCase().slice(0, 20);
+  const k = code ? await sql`select id, name from mathrepeat.classes where code = ${code}::text` : [];
+  if (!k.length) return json({ linked: true, error: "no class" }, 404);
+  await sql`update mathrepeat.people set class_id = ${k[0].id}::int where chat_id = ${who[0].chat_id}::bigint`;
+  return json({ linked: true, cls: k[0].name });
+}
+
+const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const newCode = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (x) => CODE_CHARS[x % CODE_CHARS.length]).join("");
+const cleanText = (v: unknown, n: number) => typeof v === "string" ? v.replace(/[\u0000-\u001f<>]/g, " ").trim().slice(0, n) : "";
+
+async function teacher(b: Record<string, unknown>) {
+  const c = await cfg(true);
+  const given = String(b.code ?? "");
+  if (!c.teacher_code || given.length !== c.teacher_code.length || given !== c.teacher_code) return json({ error: "forbidden" }, 403);
+  const action = String(b.action ?? "list");
+  if (action === "class_create") {
+    const name = cleanText(b.name, 60);
+    if (!name) return json({ error: "name" }, 400);
+    const r = await sql`insert into mathrepeat.classes (name, code) values (${name}::text, ${newCode()}::text) on conflict (name) do nothing returning id`;
+    if (!r.length) return json({ error: "exists" }, 409);
+  } else if (action === "class_delete") {
+    await sql`delete from mathrepeat.classes where id = ${Math.floor(Number(b.class_id)) || 0}::int`;
+  } else if (action === "unassign") {
+    await sql`delete from mathrepeat.assignments where id = ${Math.floor(Number(b.id)) || 0}::int`;
+  } else if (action === "assign") {
+    const classId = Math.floor(Number(b.class_id)) || 0;
+    const lecture = cleanText(b.lecture, 40), title = cleanText(b.title, 120), note = cleanText(b.note, 300);
+    const due = typeof b.due === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.due) ? b.due : null;
+    const k = await sql`select name from mathrepeat.classes where id = ${classId}::int`;
+    if (!k.length || !lecture || !title) return json({ error: "bad request" }, 400);
+    await sql`insert into mathrepeat.assignments (class_id, lecture, title, note, due) values (${classId}::int, ${lecture}::text, ${title}::text, ${note || null}::text, ${due}::date)`;
+    const members = await sql`select chat_id from mathrepeat.people where class_id = ${classId}::int and enabled`;
+    const site = c.site_url || "";
+    const text = [`Новое задание от преподавателя: ${title}`, due ? `Повторить до ${due.split("-").reverse().join(".")}.` : "Повторите эту тему.", note || "", "Хватит нескольких минут."].filter(Boolean).join("\n");
+    let sent = 0;
+    for (const m of members) {
+      const r = await tg("sendMessage", { chat_id: m.chat_id, text, reply_markup: { inline_keyboard: [[{ text: "Повторить тему", url: `${site}#task=${encodeURIComponent(lecture)}` }]] } });
+      if (r.ok) sent++;
+      else if (r.error_code === 403) await sql`update mathrepeat.people set enabled = false where chat_id = ${m.chat_id}::bigint`;
+    }
+    return json({ ok: true, sent, members: members.length, ...(await teacherList()) });
+  }
+  return json({ ok: true, ...(await teacherList()) });
+}
+async function teacherList() {
+  const classes = await sql`select k.id, k.name, k.code, (select count(*)::int from mathrepeat.people p where p.class_id = k.id) as members from mathrepeat.classes k order by k.name`;
+  const tasks = await sql`select id, class_id, lecture, title, note, to_char(due, 'YYYY-MM-DD') as due, to_char(created_at at time zone 'utc', 'YYYY-MM-DD') as day
+    from mathrepeat.assignments order by created_at desc limit 30`;
+  return { classes, tasks };
 }
 
 // ---------- рейтинг ----------
@@ -326,6 +396,8 @@ Deno.serve(async (req: Request) => {
     if (req.method !== "POST") return json({ error: "not found" }, 404);
     if (route === "sync") return await sync(await req.json());
     if (route === "top") return await top(await req.json());
+    if (route === "join") return await join(await req.json());
+    if (route === "teacher") return await teacher(await req.json());
     if (route === "bot") {
       const c = await cfg();
       if (!c.webhook_secret || req.headers.get("x-telegram-bot-api-secret-token") !== c.webhook_secret) return json({ error: "forbidden" }, 403);

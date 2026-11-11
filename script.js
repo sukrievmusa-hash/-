@@ -702,7 +702,34 @@ async function tgApi(path, body) {
   if (!r.ok) throw new Error('api ' + r.status);
   return r.json();
 }
+function renderClass() {
+  const linked = !!(CFG.api && S.tg.bot && S.tg.linked), cls = S.tg.cls || '';
+  $('#clsPanel').hidden = !linked;
+  $('#clsInfo').textContent = cls ? `Вы в классе «${cls}». Задания преподавателя появятся на главной, а бот пришлёт напоминание.` : 'Если преподаватель дал код класса, введите его: она сможет назначать вам темы для повторения.';
+  $('#clsJoin').hidden = !!cls; $('#clsLeave').hidden = !cls;
+  const box = $('#taskList'); box.innerHTML = '';
+  const today = dayKey(), tasks = (S.tg.tasks || []).filter((t) => (!t.due || t.due >= today) && LECS.some((l) => l.id === t.lecture));
+  $('#taskPanel').hidden = !tasks.length;
+  tasks.slice(0, 3).forEach((t) => {
+    const row = document.createElement('div'); row.className = 'taskrow';
+    const tx = document.createElement('div'); tx.className = 't';
+    const b = document.createElement('b'); b.textContent = t.title; tx.append(b);
+    const sub = [t.due ? 'до ' + t.due.split('-').reverse().join('.') : '', t.note || ''].filter(Boolean).join(' · ');
+    if (sub) { const sp = document.createElement('span'); sp.textContent = sub; tx.append(sp); }
+    const go = document.createElement('button'); go.className = 'primary'; go.textContent = 'Повторить';
+    go.onclick = () => openSheet({ t: 'lec', id: t.lecture });
+    row.append(tx, go); box.append(row);
+  });
+}
+async function clsCall(body) {
+  const e = $('#clsErr'); e.hidden = true;
+  try { const d = await tgApi('/join', Object.assign({ id: S.tg.id }, body)); S.tg.cls = d.cls || ''; await tgSync(true); renderClass(); }
+  catch (x) { e.textContent = 'Такого класса нет. Проверьте код.'; e.hidden = false; }
+}
+$('#clsBtn').onclick = () => { const c = $('#clsCode').value.trim(); if (c) clsCall({ code: c }); };
+$('#clsLeave').onclick = () => clsCall({ leave: true });
 function renderTg() {
+  renderClass();
   const on = !!(CFG.api && S.tg.bot);
   $('#tgPanel').hidden = !on; $('#tgHome').hidden = !on || S.tg.linked;
   if (!on) return;
@@ -768,6 +795,7 @@ async function tgSync(force, extra) { // расписание для бота + 
       S.tg.linked = !!d.linked;
       if (!d.linked) { S.tg.rev = 0; S.tg.hash = 0; break; }
       if (d.hour != null) S.tg.hour = d.hour;
+      S.tg.cls = d.cls || ''; S.tg.tasks = d.tasks || [];
       S.tg.nick = d.nick || ''; S.tg.show = d.show !== false;
       if (d.state) { // слили чужой прогресс; если у нас было что-то новее — отправляем общий, иначе на этом всё
         mergeState(d.state); S.tg.rev = d.rev;
@@ -848,7 +876,14 @@ refresh();
 checkReminder();
 tgLoadBot();
 tgSync(true);
-function goHash() { // ссылка из напоминания (#go) сразу открывает быстрый раунд
+function goHash() { // ссылка из напоминания (#go) сразу открывает быстрый раунд, #task=лекция открывает тему
+  const m = /^#task=(.+)$/.exec(location.hash);
+  if (m) {
+    history.replaceState(null, '', location.pathname + location.search);
+    const id = decodeURIComponent(m[1]);
+    if (LECS.some((l) => l.id === id) && $('#game').hidden) openSheet({ t: 'lec', id });
+    return;
+  }
   if (location.hash !== '#go') return;
   history.replaceState(null, '', location.pathname + location.search);
   if ($('#game').hidden) playToday(QUICK);
