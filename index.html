@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Математика: повторение-игра</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236c7bff'/%3E%3Ctext x='32' y='46' font-size='40' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%91%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=16">
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
 <script defer src="vendor/katex/katex.min.js"></script>
 <script defer src="vendor/katex/contrib/auto-render.min.js"></script>
@@ -13,15 +13,15 @@
 <script defer src="lectures.js?v=15"></script>
 <script defer src="lessons.js?v=15"></script>
 <script defer src="checks.js?v=15"></script>
-<script defer src="script.js?v=13"></script>
+<script defer src="script.js?v=16"></script>
 </head>
 <body>
 
 <header class="top">
   <div class="brand">∑ Мат-повтор</div>
   <div class="hud">
-    <span title="Серия дней">🔥 <b id="hStreak">0</b></span>
-    <span title="Уровень">⭐ <b id="hLevel">1</b></span>
+    <span title="Серия дней">Серия <b id="hStreak">0</b></span>
+    <span title="Уровень">Ур. <b id="hLevel">1</b></span>
     <span title="Опыт">XP <b id="hXp">0</b></span>
   </div>
 </header>
@@ -30,8 +30,8 @@
   <button data-tab="home" class="active">Главная</button>
   <button data-tab="progress">Прогресс</button>
   <button data-tab="top">Рейтинг</button>
-  <button data-tab="cards">Карточки</button>
-  <button data-tab="settings" aria-label="Настройки" class="icon">⚙️</button>
+  <button data-tab="cards" hidden>Карточки</button>
+  <button data-tab="settings">Настройки</button>
 </nav>
 
 <main>
@@ -41,38 +41,39 @@
       <div class="due-num"><span id="dueCount">0</span></div>
       <div class="muted">карточек на сегодня</div>
       <div class="today" id="dueSplit"></div>
-      <button id="playBtn" class="primary">⚡ Быстрый раунд</button>
+      <button id="playBtn" class="primary">Быстрый раунд</button>
       <div class="muted small" id="playHint"></div>
-      <button id="playFull" class="ghost">Полный раунд</button>
+      <button id="playFull" class="linkbtn">Полный раунд</button>
       <div class="goalrow"><div class="bar"><div id="goalBar"></div></div><div class="muted small" id="goalText"></div></div>
     </div>
 
     <div class="panel tgcall" id="tgHome" hidden>
-      <b>🔔 Напоминания в Telegram</b>
+      <b>Напоминания в Telegram</b>
       <div class="muted small">Бот сам напишет, когда пора повторить и какая тема проседает. Сайт держать открытым не нужно.</div>
       <button class="primary tgConnect">Подключить Telegram</button>
     </div>
 
     <div class="panel">
-      <h3>Ваша слабая сторона</h3>
+      <h3>Слабые места</h3>
       <div id="weakHome"></div>
     </div>
 
     <div class="panel">
       <h3>Выбрать тему</h3>
-      <div class="muted small legend">Нажмите на лекцию и выберите, как вы её поняли: объяснить подробно, объяснить коротко или только повторять.</div>
+      <div class="muted small legend">Нажмите на лекцию: объяснить подробно, коротко или только повторять.</div>
       <div id="topics"></div>
     </div>
 
     <div class="panel center">
       <div class="muted small">Сайт бесплатный и без рекламы</div>
-      <button class="ghost supportBtn">💛 Поддержать автора</button>
+      <button class="ghost supportBtn">Поддержать автора</button>
     </div>
 
   </section>
 
   <!-- ПРОГРЕСС -->
   <section id="tab-progress" class="tab">
+    <button id="openCards" class="linkbtn">Все карточки и поиск →</button>
     <div class="panel big">
       <div class="muted">Общий уровень знаний</div>
       <div class="due-num"><span id="lvOverall">0%</span></div>
@@ -93,14 +94,14 @@
       <div id="errList"></div>
       <h3 id="hardHead" class="subh" hidden>Самые трудные карточки</h3>
       <div id="hardList"></div>
-      <button id="weakBtn" class="primary" hidden>🎯 Тренировать слабые места</button>
+      <button id="weakBtn" class="primary" hidden>Тренировать слабые места</button>
     </div>
   </section>
 
   <!-- РЕЙТИНГ -->
   <section id="tab-top" class="tab">
     <div class="panel">
-      <h3>🏆 Рейтинг группы за 7 дней</h3>
+      <h3>Рейтинг группы за 7 дней</h3>
       <div class="muted small legend">Очки (XP) за последние 7 дней. Обновляется после каждого раунда.</div>
       <div id="topList"></div>
       <div id="topJoin" hidden>
@@ -154,7 +155,7 @@
       <button id="resetBtn" class="danger">Удалить все данные</button>
     </div>
     <div class="panel center">
-      <button class="ghost supportBtn">💛 Поддержать автора</button>
+      <button class="ghost supportBtn">Поддержать автора</button>
     </div>
   </section>
 </main>
@@ -212,7 +213,7 @@
       <div class="subh">Как вы поняли эту тему?</div>
       <button class="mode" data-mode="full"><b>😵 Не понял(а)</b><span>Разбор с нуля: на пальцах, с картинками и примерами по шагам</span></button>
       <button class="mode" data-mode="mid"><b>🤔 Понял(а) наполовину</b><span>Короткий разбор: суть каждой идеи и пример</span></button>
-      <button class="mode" data-mode="rep"><b>✅ Понял(а), нужно повторять</b><span>Без объяснений, сразу карточки</span></button>
+      <button class="mode" data-mode="rep"><b>Понял(а), нужно повторять</b><span>Без объяснений, сразу карточки</span></button>
       <div class="subh">Или сразу карточки</div>
     </div>
     <button id="shRepeat" class="primary"></button>
@@ -224,7 +225,7 @@
 <div id="support" class="sheetwrap" hidden>
   <div class="sheet">
     <button id="supClose" class="x" aria-label="Закрыть">✕</button>
-    <h3>💛 Поддержать автора</h3>
+    <h3>Поддержать автора</h3>
     <div class="muted small">Сайт бесплатный и без рекламы. Если он помогает не забывать математику, автора можно поддержать.</div>
     <div id="supKaspi">
       <div class="muted small suplabel">Перевод на Kaspi по номеру</div>
