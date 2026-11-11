@@ -169,3 +169,21 @@ button.primary,button.ghost,button.danger,.filebtn{display:inline-block;border-r
 .fig .fa{fill:var(--accent);opacity:.2;stroke:none}.fig .fa2{fill:var(--accent);opacity:.35;stroke:none}
 .fig .fg{fill:var(--good);opacity:.2;stroke:none}.fig .fw{fill:var(--warn);opacity:.3;stroke:none}
 .fig .dot{fill:var(--accent);stroke:none}.fig .dotg{fill:var(--good);stroke:none}
+
+/* v12: автопроверка ответа, рейтинг, компактная главная */
+.tabs button.icon{flex:0 0 auto;padding:8px 10px!important}
+.goalrow{margin-top:14px;text-align:left}
+.goalrow .muted{margin-top:4px}
+.opts{display:grid;gap:8px;margin-bottom:10px}
+.opt{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:13px 12px;font-size:17px;text-align:center;overflow-x:auto}
+.opt.right{border-color:var(--good);background:rgba(53,196,134,.16)}
+.opt.wrong{border-color:var(--bad);background:rgba(239,91,107,.16)}
+.opt:disabled{cursor:default;color:var(--text);opacity:1}
+.grades.three{grid-template-columns:repeat(3,1fr)}
+.toprow{display:flex;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid var(--line)}
+.toprow:last-of-type{border:0}
+.toprow .place{width:30px;text-align:center;font-weight:700}
+.toprow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toprow.me{background:rgba(108,123,255,.14);border-radius:10px;border-bottom-color:transparent}
+#tab-top .primary{display:block;width:100%;margin-top:10px;padding:13px}
+#topMe .row input{width:auto}

@@ -28,6 +28,9 @@ const CFG = window.MR_CONFIG || {};
 S.tg = S.tg || { id: '', linked: false, bot: '', botAt: 0, hour: 19 };
 S.modes = S.modes || {}; // как пользователь понял лекцию: full — не понял, mid — наполовину, rep — только повторять
 const LESSONS = window.LESSONS || {};
+const CHECKS = window.CHECKS || {}; // варианты ответа для карточек, которые сайт проверяет сам
+const checkOf = (c) => CHECKS[c.lecture + '|' + c.q];
+S.stats.xpLog = S.stats.xpLog || {};
 const save = () => localStorage.setItem(KEY, JSON.stringify(S));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const dayKey = (d = new Date()) => d.toLocaleDateString('sv');
@@ -133,6 +136,7 @@ $$('.tabs button').forEach((b) => b.addEventListener('click', () => {
   $$('.tabs button').forEach((x) => x.classList.toggle('active', x === b));
   $$('.tab').forEach((t) => t.classList.toggle('active', t.id === 'tab-' + b.dataset.tab));
   refresh();
+  if (b.dataset.tab === 'top') loadTop();
 }));
 
 /* ---------- отрисовка ---------- */
@@ -164,7 +168,7 @@ function refresh() {
   const done = S.stats.log[dayKey()] || 0;
   const goal = S.settings.goal;
   $('#goalBar').style.width = Math.min(100, done / goal * 100) + '%';
-  $('#goalText').textContent = `${done} из ${goal} карточек${done >= goal ? ' — цель выполнена! 🎉' : ''}`;
+  $('#goalText').textContent = `Цель на сегодня: ${done} из ${goal}${done >= goal ? ' — выполнена! 🎉' : ''}`;
 
   // прогноз на 7 дней
   const f = $('#forecast'); f.innerHTML = '';
@@ -226,8 +230,8 @@ function renderWeakHome() {
   const text = (t) => { const d = document.createElement('div'); d.className = 'muted small'; d.textContent = t; box.append(d); };
   const btn = (cls, t, fn) => { const b = document.createElement('button'); b.className = cls; b.textContent = t; b.onclick = fn; box.append(b); return b; };
   if (!rows.length) {
-    text('Не знаете, какие темы у вас проседают? Короткий тест — по 2 вопроса из каждой лекции — покажет, где пробелы.');
-    btn('primary', '🔍 Найти слабые места · ~5 минут', startDiag);
+    text('Не знаете, какие темы у вас проседают? Короткий тест — по 2 вопроса из каждой лекции и уточняющие там, где результат спорный, — покажет, где пробелы.');
+    btn('primary', '🔍 Найти слабые места · 5–7 минут', startDiag);
     return;
   }
   if (!weak.length) {
@@ -243,7 +247,7 @@ function renderWeakHome() {
     const go = document.createElement('button'); go.textContent = '🎯 Подтянуть'; go.onclick = () => openSheet(x.sc);
     r.append(t, go); box.append(r);
   });
-  btn('linkbtn', S.diag ? `Пройти диагностику заново (последняя: ${new Date(S.diag.day + 'T12:00').toLocaleDateString('ru', { day: 'numeric', month: 'long' })})` : 'Проверить все лекции: диагностика ~5 минут', startDiag);
+  btn('linkbtn', S.diag ? `Пройти диагностику заново (последняя: ${new Date(S.diag.day + 'T12:00').toLocaleDateString('ru', { day: 'numeric', month: 'long' })})` : 'Проверить все лекции: диагностика 5–7 минут', startDiag);
 }
 let openSec = 0;
 function renderTopics() {
@@ -463,14 +467,31 @@ function playToday(size) {
   else startGame(true, ALL, false, false, size);
 }
 /* диагностика: по 2 случайные карточки из каждой лекции, без жизней; расписание не сдвигает */
+function diagPick(lecId, n, used) { // сначала карточки с автопроверкой — по ним результат объективнее
+  const pool = shuffle(S.cards.filter((c) => c.lecture === lecId && !used.has(c.id)));
+  const ch = pool.filter(checkOf), rest = pool.filter((c) => !checkOf(c)), out = [];
+  while (out.length < n && (ch.length || rest.length)) { const c = (out.length % 2 === 0 ? ch.shift() || rest.shift() : rest.shift() || ch.shift()); out.push(c); used.add(c.id); }
+  return out;
+}
 function startDiag() {
-  const q = [];
-  LECS.forEach((l) => shuffle(S.cards.filter((c) => c.lecture === l.id)).slice(0, 2).forEach((c) => q.push(c)));
+  const q = [], used = new Set();
+  LECS.forEach((l) => diagPick(l.id, 2, used).forEach((c) => q.push(c)));
   if (!q.length) return;
-  launch(q, { practice: true, diag: true, res: {} });
+  launch(q, { practice: true, diag: true, res: {}, used, extraDone: false });
+}
+/* после первого круга: по лекциям со спорным результатом (не 0% и не 100%) задаём ещё по 2 вопроса */
+function diagExtend() {
+  if (G.extraDone) return false;
+  G.extraDone = true;
+  const more = [];
+  LECS.forEach((l) => { const r = G.res[l.id]; if (r && r.s > 0 && r.s < r.n) diagPick(l.id, 2, G.used).forEach((c) => more.push(c)); });
+  if (!more.length) return false;
+  G.q.push(...more); G.total = G.q.length; G.extra2 = more.length;
+  return true;
 }
 function hearts() { $('#gHearts').textContent = G.diag ? `${Math.min(G.i + 1, G.total)} из ${G.total}` : '❤️'.repeat(G.hearts) + '🖤'.repeat(3 - G.hearts); }
 function nextCard() {
+  if (G.diag && G.i >= G.q.length) diagExtend();
   if (G.i >= G.q.length || G.hearts <= 0) return finish();
   const c = G.q[G.i];
   hearts();
@@ -479,17 +500,39 @@ function nextCard() {
   $('#gLecture').textContent = (G.diag ? 'Диагностика · ' : G.weak ? 'Слабые места · ' : G.practice ? 'Практика · ' : 'Повторение · ') + lectureName(c.lecture);
   setText($('#gQ'), c.q);
   setText($('#gA'), c.a);
-  $('#gA').hidden = true; $('#gShow').hidden = false; $('#gGrades').hidden = true; $('#gExplain').hidden = true;
+  $('#gA').hidden = true; $('#gGrades').hidden = true; $('#gExplain').hidden = true; $('#gNext').hidden = true;
+  const ch = checkOf(c), ob = $('#gOpts');
+  ob.hidden = !ch; ob.innerHTML = ''; $('#gShow').hidden = !!ch;
+  if (ch) shuffle(ch.map((t, k) => [t, k === 0])).forEach(([t, right]) => {
+    const b = document.createElement('button'); b.className = 'opt'; b.dataset.right = right ? '1' : '';
+    setText(b, t); b.onclick = () => pickOpt(b, right); ob.append(b);
+  });
   $('.flash').classList.remove('pop'); void $('.flash').offsetWidth; $('.flash').classList.add('pop');
 }
-$('#gShow').onclick = () => {
-  const c = G.q[G.i];
+function showGrades(c, noForgot) {
   $('#gA').hidden = false; $('#gShow').hidden = true; $('#gGrades').hidden = false;
   $('#gExplain').hidden = !LESSONS[c.lecture];
-  $$('#gGrades button').forEach((b) => { b.querySelector('small').textContent = G.practice ? '' : previewLabel(c, +b.dataset.g); });
-};
-$$('#gGrades button').forEach((b) => b.addEventListener('click', () => {
-  const g = +b.dataset.g, c = G.q[G.i];
+  $$('#gGrades button').forEach((b) => {
+    b.hidden = noForgot && b.dataset.g === '0';
+    b.querySelector('small').textContent = G.practice ? '' : previewLabel(c, +b.dataset.g);
+  });
+  $('#gGrades').classList.toggle('three', !!noForgot);
+}
+$('#gShow').onclick = () => showGrades(G.q[G.i], false);
+/* карточка с вариантами: сайт сам проверяет ответ */
+function pickOpt(btn, right) {
+  const c = G.q[G.i];
+  $$('#gOpts .opt').forEach((b) => { b.disabled = true; if (b.dataset.right) b.classList.add('right'); });
+  if (right) { showGrades(c, true); return; } // верно — остаётся оценить, насколько легко
+  btn.classList.add('wrong');
+  $('#gA').hidden = false; $('#gExplain').hidden = !LESSONS[c.lecture];
+  $('#gNext').hidden = false;
+}
+$('#gNext').onclick = () => applyGrade(0);
+$$('#gGrades button').forEach((b) => b.addEventListener('click', () => applyGrade(+b.dataset.g)));
+function applyGrade(g) {
+  const c = G.q[G.i];
+  c.upd = Date.now();
   if (g === 0) c.bad = (c.bad || 0) + 1; else c.ok = (c.ok || 0) + 1; // статистика ошибок (и в практике тоже)
   if (g === 1) c.hard = (c.hard || 0) + 1;
   if (G.diag) {
@@ -504,6 +547,7 @@ $$('#gGrades button').forEach((b) => b.addEventListener('click', () => {
     G.right++; G.combo++; G.bestCombo = Math.max(G.bestCombo, G.combo);
     const gain = Math.round((g === 3 ? 15 : g === 2 ? 10 : 6) * (1 + Math.min(G.combo, 10) * 0.1) * (G.practice ? .5 : 1));
     G.xp += gain;
+    const k = dayKey(); S.stats.xpLog[k] = (S.stats.xpLog[k] || 0) + gain; // очки по дням — для рейтинга за неделю
   }
   if (!G.practice) {
     if (!c.seen) { c.seen = true; const k = dayKey(); S.stats.newLog[k] = (S.stats.newLog[k] || 0) + 1; }
@@ -511,7 +555,7 @@ $$('#gGrades button').forEach((b) => b.addEventListener('click', () => {
   }
   G.i++;
   save(); nextCard();
-}));
+}
 function bumpDay() {
   const k = dayKey();
   S.stats.log[k] = (S.stats.log[k] || 0) + 1;
@@ -530,7 +574,7 @@ function finishDiag(r) {
   note.textContent = w ? `Слабее всего: ${w.l.title}` + (weak.length > 1 ? ` и ещё ${weak.length - 1}` : '') : 'Слабых мест не нашлось 👍 Продолжайте повторять по расписанию.';
   const list = document.createElement('div'); list.className = 'dres';
   rows.forEach((x) => list.append(prow(lecLabel(x.l.title), lecTopic(x.l.title), Math.round(x.p * 100) + '%', x.p, x.p < 0.5 ? 'var(--bad)' : x.p < 0.7 ? 'var(--warn)' : 'var(--good)')));
-  const xp = document.createElement('div'); xp.className = 'muted small'; xp.textContent = `+${G.xp} XP · результат сохранён на главной в блоке «Ваша слабая сторона»`;
+  const xp = document.createElement('div'); xp.className = 'muted small'; xp.textContent = (G.extra2 ? `Задано ${G.extra2} уточняющих вопроса по спорным лекциям. ` : '') + `+${G.xp} XP · результат сохранён на главной в блоке «Ваша слабая сторона»`;
   r.append(h, note, list, xp);
   if (w) {
     const go = document.createElement('button'); go.className = 'primary'; go.textContent = `🎯 Подтянуть: ${lecLabel(w.l.title)}`;
@@ -544,7 +588,7 @@ function finish() {
   S.stats.xp += G.xp;
   const lvl = level(S.stats.xp), up = lvl > G.lvl;
   save();
-  $('.flash').hidden = true; $('#gShow').hidden = true; $('#gGrades').hidden = true; $('.gmeta').hidden = true; $('#gExplain').hidden = true;
+  $('.flash').hidden = true; $('#gShow').hidden = true; $('#gGrades').hidden = true; $('.gmeta').hidden = true; $('#gExplain').hidden = true; $('#gOpts').hidden = true; $('#gNext').hidden = true;
   const r = $('#gResult'); r.hidden = false; r.innerHTML = '';
   if (G.diag) { finishDiag(r); G.i = G.q.length; refresh(); tgSync(true); return; }
   const h = document.createElement('h2');
@@ -645,29 +689,113 @@ function renderTg() {
     ? `✅ Telegram подключён. Бот напишет в ${String(S.tg.hour).padStart(2, '0')}:00, если есть что повторить. Время меняется командой /time в боте.`
     : 'Бот сам напишет, когда пора повторить: сколько карточек накопилось и какая тема проседает. Сайт держать открытым не нужно.';
   $('#tgBtn').textContent = S.tg.linked ? 'Открыть бота' : 'Подключить Telegram';
-  $('#tgOff').hidden = !S.tg.linked;
+  $('#tgOff').hidden = !S.tg.linked; $('#tgSyncInfo').hidden = !S.tg.linked;
 }
 async function tgLoadBot() { // имя бота узнаём у сервера и запоминаем на сутки
   if (!CFG.api) return;
   if (S.tg.bot && Date.now() - (S.tg.botAt || 0) < DAY) return;
   try { const d = await tgApi('/info'); S.tg.bot = d.bot || ''; S.tg.botAt = Date.now(); save(); renderTg(); } catch (e) {}
 }
-let tgLast = 0;
-async function tgSync(force) { // отправляем боту только расписание: когда какая карточка «созреет», без текста карточек
-  if (!CFG.api || !S.tg.id) return;
-  if (!force && Date.now() - tgLast < 30e3) return;
-  tgLast = Date.now();
-  try {
-    const d = await tgApi('/sync', {
-      id: S.tg.id, tz: -new Date().getTimezoneOffset(),
-      due: S.cards.filter((c) => c.seen).map((c) => Math.floor(c.due / 1000)),
-      unseen: S.cards.filter((c) => !c.seen).length, newPerDay: S.settings.newPerDay,
-      weak: weakestTitle(), streak: streakNow(), lastDay: S.stats.last || null
-    });
-    S.tg.linked = !!d.linked; if (d.hour != null) S.tg.hour = d.hour;
-    save(); renderTg();
-  } catch (e) {}
+/* прогресс для переноса между устройствами: только числа расписания, без текста карточек */
+const F = ['ease', 'interval', 'reps', 'lapses', 'due', 'ok', 'bad', 'hard', 'upd'];
+const lastDays = (o, n) => Object.fromEntries(Object.keys(o || {}).sort().slice(-n).map((k) => [k, o[k]]));
+function packState() {
+  return {
+    v: 1,
+    cards: S.cards.filter((c) => c.seen || c.upd).map((c) => [c.id, c.seen ? 1 : 0].concat(F.map((f) => c[f] || 0))),
+    stats: { xp: S.stats.xp, streak: S.stats.streak, last: S.stats.last, best: S.stats.best || 0, log: lastDays(S.stats.log, 60), newLog: lastDays(S.stats.newLog, 3), xpLog: lastDays(S.stats.xpLog, 14) },
+    modes: S.modes, diag: S.diag || null
+  };
 }
+function mergeState(r) { // по каждой карточке берём ту версию, где ответ был позже
+  if (!r || r.v !== 1) return;
+  const byId = new Map(S.cards.map((c) => [c.id, c]));
+  (r.cards || []).forEach((row) => {
+    const c = byId.get(row[0]); if (!c) return;
+    const upd = row[2 + F.indexOf('upd')] || 0;
+    if (upd <= (c.upd || 0)) return;
+    c.seen = !!row[1]; F.forEach((f, k) => { c[f] = row[2 + k]; });
+    if (!c.ease) c.ease = 2.5;
+  });
+  const st = r.stats || {}, me = S.stats;
+  const maxMap = (a, b) => { const o = { ...(a || {}) }; Object.entries(b || {}).forEach(([k, v]) => { o[k] = Math.max(o[k] || 0, v || 0); }); return o; };
+  if ((st.last || '') > (me.last || '')) { me.last = st.last; me.streak = st.streak || 0; }
+  else if ((st.last || '') === (me.last || '')) me.streak = Math.max(me.streak || 0, st.streak || 0);
+  me.xp = Math.max(me.xp || 0, st.xp || 0); me.best = Math.max(me.best || 0, st.best || 0);
+  me.log = maxMap(me.log, st.log); me.newLog = maxMap(me.newLog, st.newLog); me.xpLog = maxMap(me.xpLog, st.xpLog);
+  S.modes = { ...(r.modes || {}), ...S.modes };
+  if (r.diag && (!S.diag || r.diag.day > S.diag.day)) S.diag = r.diag;
+}
+const canon = (o) => JSON.stringify(o, (k, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((x) => [x, v[x]])) : v);
+const hash = (t) => { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return h; };
+let tgLast = 0, tgBusy = false;
+async function tgSync(force, extra) { // расписание для бота + прогресс для других устройств
+  if (!CFG.api || !S.tg.id || tgBusy) return;
+  if (!force && Date.now() - tgLast < 30e3) return;
+  tgLast = Date.now(); tgBusy = true;
+  try {
+    for (let round = 0; round < 2; round++) {
+      const state = packState(), h = hash(JSON.stringify(state));
+      const d = await tgApi('/sync', Object.assign({
+        id: S.tg.id, tz: -new Date().getTimezoneOffset(),
+        due: S.cards.filter((c) => c.seen).map((c) => Math.floor(c.due / 1000)),
+        unseen: S.cards.filter((c) => !c.seen).length, newPerDay: S.settings.newPerDay,
+        weak: weakestTitle(), streak: streakNow(), lastDay: S.stats.last || null,
+        xp: S.stats.xp, xpDays: lastDays(S.stats.xpLog, 8),
+        base: S.tg.rev || 0, state: (h !== S.tg.hash || !S.tg.rev) ? state : undefined
+      }, extra || {}));
+      S.tg.linked = !!d.linked;
+      if (!d.linked) { S.tg.rev = 0; S.tg.hash = 0; break; }
+      if (d.hour != null) S.tg.hour = d.hour;
+      S.tg.nick = d.nick || ''; S.tg.show = d.show !== false;
+      if (d.state) { // слили чужой прогресс; если у нас было что-то новее — отправляем общий, иначе на этом всё
+        mergeState(d.state); S.tg.rev = d.rev;
+        const mine = packState(), same = canon(mine) === canon(d.state);
+        S.tg.hash = same ? hash(JSON.stringify(mine)) : 0; save();
+        if (same) break; continue;
+      }
+      if (d.rev != null) { if (d.rev !== S.tg.rev || state) S.tg.hash = h; S.tg.rev = d.rev; }
+      break;
+    }
+    save(); renderTg();
+    if ($('#game').hidden && $('#lesson').hidden) refreshLight();
+  } catch (e) {} finally { tgBusy = false; }
+}
+function refreshLight() { // перерисовка без повторной синхронизации
+  $('#hStreak').textContent = streakNow(); $('#hLevel').textContent = level(S.stats.xp); $('#hXp').textContent = S.stats.xp;
+  refresh();
+}
+
+/* ---------- рейтинг группы ---------- */
+async function loadTop() {
+  const list = $('#topList');
+  const on = !!(CFG.api && S.tg.bot);
+  $('#topJoin').hidden = !on || S.tg.linked; $('#topMe').hidden = !S.tg.linked;
+  if (!on) { list.textContent = 'Рейтинг появится, когда заработает Telegram-бот.'; return; }
+  if (!S.tg.linked) { list.textContent = ''; return; }
+  $('#nickInput').value = S.tg.nick || ''; $('#showInput').checked = S.tg.show !== false;
+  if (!list.children.length) list.textContent = 'Загружаю…';
+  try {
+    const d = await tgApi('/top', { id: S.tg.id });
+    list.innerHTML = '';
+    if (!d.linked || !d.top.length) { list.textContent = 'Пока пусто. Сыграйте раунд — и вы первый.'; return; }
+    d.top.forEach((r) => {
+      const row = document.createElement('div'); row.className = 'toprow' + (r.me ? ' me' : '');
+      const pl = document.createElement('span'); pl.className = 'place'; pl.textContent = ['🥇', '🥈', '🥉'][r.place - 1] || r.place;
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = r.nick + (r.me ? ' (вы)' : '');
+      const st = document.createElement('span'); st.className = 'muted small'; st.textContent = r.streak ? `🔥 ${r.streak}` : '';
+      const xp = document.createElement('b'); xp.textContent = r.week + ' XP';
+      row.append(pl, nm, st, xp); list.append(row);
+    });
+    if (d.top.length === 1) { const t = document.createElement('div'); t.className = 'muted small'; t.style.marginTop = '8px'; t.textContent = 'Пока вы один. Отправьте сайт одногруппникам — соревноваться интереснее.'; list.append(t); }
+  } catch (e) { list.textContent = 'Не получилось загрузить рейтинг. Проверьте интернет.'; }
+}
+$('#nickSave').onclick = async () => {
+  const nick = $('#nickInput').value.trim().slice(0, 20);
+  await tgSync(true, { nick, show: $('#showInput').checked });
+  $('#nickSave').textContent = 'Сохранено ✓'; setTimeout(() => { $('#nickSave').textContent = 'Сохранить'; }, 2000);
+  loadTop();
+};
 $$('.tgConnect').forEach((b) => b.addEventListener('click', () => {
   if (!S.tg.bot) return;
   if (!S.tg.id) { S.tg.id = newId(); save(); }
@@ -677,7 +805,7 @@ $$('.tgConnect').forEach((b) => b.addEventListener('click', () => {
 $('#tgOff').onclick = async () => {
   if (!confirm('Отключить напоминания в Telegram?')) return;
   try { await tgApi('/sync', { id: S.tg.id, unlink: true }); } catch (e) { return alert('Не получилось связаться с сервером, попробуйте позже'); }
-  S.tg.id = ''; S.tg.linked = false; save(); renderTg();
+  S.tg.id = ''; S.tg.linked = false; S.tg.rev = 0; S.tg.hash = 0; save(); renderTg();
 };
 
 /* ---------- напоминания, пока сайт открыт ---------- */

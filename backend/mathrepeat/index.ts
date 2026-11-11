@@ -1,10 +1,11 @@
-// Мат-повтор: сервер напоминаний в Telegram (Supabase Edge Function).
+// Мат-повтор: сервер напоминаний в Telegram, синхронизации прогресса и рейтинга (Supabase Edge Function).
 // Маршруты:
 //   GET  /info   — имя бота для сайта
-//   POST /sync   — сайт присылает расписание карточек подключённого устройства
-//   POST /bot    — вебхук Telegram (команды /start, /time, /status, /stop, /on)
+//   POST /sync   — сайт присылает расписание и прогресс; в ответ может прийти прогресс с другого устройства
+//   POST /top    — рейтинг группы за 7 дней
+//   POST /bot    — вебхук Telegram (команды /start, /time, /status, /top, /stop, /on)
 //   POST /cron   — раз в час: разослать напоминания тем, у кого наступило их время
-//   POST /setup  — один раз после добавления токена: вебхук + список команд
+//   POST /setup  — один раз после добавления токена: вебхук, имя и список команд
 // Функция деплоится с verify_jwt = false: /bot и /cron проверяют свои секреты,
 // /sync меняет только строку с известным случайным device_id.
 import postgres from "npm:postgres@3.4.5";
@@ -60,13 +61,22 @@ const playButton = (site: string) => ({ inline_keyboard: [[{ text: "▶ Повт
 const hourKeyboard = () => ({ inline_keyboard: HOURS.map((row) => row.map((h) => ({ text: hh(h), callback_data: "h:" + h }))) });
 
 // ---------- сайт -> сервер ----------
+const TODAY = `((now() at time zone 'utc') + make_interval(mins => tz_offset_min))::date`;
+const cleanNick = (v: unknown) => typeof v === "string" ? v.replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 20) : "";
+
 async function sync(b: Record<string, unknown>) {
   const id = String(b.id ?? "");
   if (!UUID.test(id)) return json({ error: "bad id" }, 400);
   if (b.unlink) {
-    await sql`delete from mathrepeat.users where device_id = ${id}::text`;
+    const d = await sql`delete from mathrepeat.devices where device_id = ${id}::text returning chat_id`;
+    // последнее устройство отключилось — удаляем и данные человека
+    if (d.length) await sql`delete from mathrepeat.people p where p.chat_id = ${d[0].chat_id}::bigint and not exists (select 1 from mathrepeat.devices x where x.chat_id = p.chat_id)`;
     return json({ linked: false });
   }
+  const who = await sql`select p.chat_id, p.state_rev, (p.state is not null) as has_state from mathrepeat.devices d join mathrepeat.people p using (chat_id) where d.device_id = ${id}::text`;
+  if (!who.length) return json({ linked: false }); // строку создаёт только бот по команде /start
+  const chat = who[0].chat_id, rev = Number(who[0].state_rev);
+
   const now = Math.floor(Date.now() / 1000);
   const due = (Array.isArray(b.due) ? b.due : []).slice(0, 5000)
     .map((x) => Math.floor(Number(x))).filter((x) => Number.isFinite(x) && x > 0 && x < now + 20 * 365 * 86400);
@@ -76,9 +86,16 @@ async function sync(b: Record<string, unknown>) {
   };
   const lastDay = typeof b.lastDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.lastDay) ? b.lastDay : null;
   const weak = typeof b.weak === "string" && b.weak ? b.weak.slice(0, 120) : null;
-  // строку создаёт только бот по команде /start, сайт может лишь обновить уже подключённую
+  const xpDays: Record<string, number> = {};
+  if (b.xpDays && typeof b.xpDays === "object") {
+    Object.entries(b.xpDays as Record<string, unknown>).slice(0, 14).forEach(([k, v]) => {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(k)) xpDays[k] = int(v, 0, 100000, 0);
+    });
+  }
+  const nick = cleanNick(b.nick);
+  const show = typeof b.show === "boolean" ? b.show : null;
   const rows = await sql`
-    update mathrepeat.users set
+    update mathrepeat.people set
       due_times = string_to_array(${due.join(",")}::text, ',')::int[],
       tz_offset_min = ${int(b.tz, -720, 840, 300)}::int,
       unseen = ${int(b.unseen, 0, 100000, 0)}::int,
@@ -86,10 +103,46 @@ async function sync(b: Record<string, unknown>) {
       weak = ${weak}::text,
       streak = ${int(b.streak, 0, 100000, 0)}::int,
       last_study_day = ${lastDay}::date,
+      xp = coalesce(${b.xp == null ? null : int(b.xp, 0, 100000000, 0)}::int, xp),
+      xp_days = coalesce(${b.xpDays && typeof b.xpDays === "object" ? JSON.stringify(xpDays) : null}::text::jsonb, xp_days),
+      nick = coalesce(nullif(${nick}::text, ''), nick),
+      show_top = coalesce(${show}::boolean, show_top),
       updated_at = now()
-    where device_id = ${id}::text and chat_id is not null
-    returning remind_hour`;
-  return json(rows.length ? { linked: true, hour: rows[0].remind_hour } : { linked: false });
+    where chat_id = ${chat}::bigint
+    returning remind_hour, nick, show_top`;
+  const out: Record<string, unknown> = { linked: true, hour: rows[0].remind_hour, nick: rows[0].nick, show: rows[0].show_top, rev };
+
+  // прогресс: если на сервере версия новее той, что видело устройство, — отдаём её, устройство сольёт и пришлёт заново
+  const base = int(b.base, 0, Number.MAX_SAFE_INTEGER, 0);
+  if (who[0].has_state && base !== rev) {
+    const st = await sql`select state::text as state from mathrepeat.people where chat_id = ${chat}::bigint`;
+    out.state = JSON.parse(st[0].state);
+  } else if (b.state && typeof b.state === "object") {
+    const text = JSON.stringify(b.state);
+    if (text.length <= 400_000) {
+      const r = await sql`update mathrepeat.people set state = ${text}::text::jsonb, state_rev = state_rev + 1 where chat_id = ${chat}::bigint and state_rev = ${rev}::bigint returning state_rev`;
+      if (r.length) out.rev = Number(r[0].state_rev);
+    }
+  }
+  return json(out);
+}
+
+// ---------- рейтинг ----------
+async function topRows(limit: number) {
+  return await sql`
+    select chat_id, coalesce(nullif(nick, ''), split_part(coalesce(tg_name, ''), ' ', 1), 'Без имени') as nick, streak,
+      case when last_study_day >= ${sql.unsafe(TODAY)} - 1 then streak else 0 end as live_streak,
+      mathrepeat.week_xp(xp_days, ${sql.unsafe(TODAY)}) as week
+    from mathrepeat.people where show_top
+    order by week desc, xp desc limit ${limit}::int`;
+}
+async function top(b: Record<string, unknown>) {
+  const id = String(b.id ?? "");
+  if (!UUID.test(id)) return json({ error: "bad id" }, 400);
+  const who = await sql`select chat_id from mathrepeat.devices where device_id = ${id}::text`;
+  if (!who.length) return json({ linked: false });
+  const rows = (await topRows(50)).filter((r) => r.week > 0 || String(r.chat_id) === String(who[0].chat_id));
+  return json({ linked: true, top: rows.map((r, i) => ({ place: i + 1, nick: r.nick, week: r.week, streak: r.live_streak, me: String(r.chat_id) === String(who[0].chat_id) })) });
 }
 
 // ---------- Telegram -> сервер ----------
@@ -104,7 +157,7 @@ async function onUpdate(u: any) {
     const m = /^h:(\d{1,2})$/.exec(q.data || "");
     if (chat && m && Number(m[1]) <= 23) {
       const h = Number(m[1]);
-      const r = await sql`update mathrepeat.users set remind_hour = ${h}::int, enabled = true where chat_id = ${chat}::bigint returning device_id`;
+      const r = await sql`update mathrepeat.people set remind_hour = ${h}::int, enabled = true where chat_id = ${chat}::bigint returning chat_id`;
       await tg("answerCallbackQuery", { callback_query_id: q.id, text: r.length ? "Готово" : "Сначала подключите сайт" });
       if (r.length) {
         await tg("editMessageText", { chat_id: chat, message_id: q.message.message_id, text: `⏰ Буду напоминать каждый день в ${hh(h)}, если есть что повторить.` });
@@ -124,7 +177,7 @@ async function onUpdate(u: any) {
   const mine = () => sql`
     select remind_hour, enabled, unseen, new_per_day, weak,
       (select count(*)::int from unnest(due_times) t where t <= extract(epoch from now())) as due
-    from mathrepeat.users where chat_id = ${chat}::bigint limit 1`;
+    from mathrepeat.people where chat_id = ${chat}::bigint limit 1`;
   const notLinked = () => tg("sendMessage", {
     chat_id: chat,
     text: "Чтобы я напоминал о повторении, откройте сайт → «Настройки» → «Подключить Telegram».",
@@ -133,20 +186,26 @@ async function onUpdate(u: any) {
 
   if (command === "/start") {
     if (arg && UUID.test(arg)) {
-      await sql`delete from mathrepeat.users where chat_id = ${chat}::bigint and device_id <> ${arg}::text`;
       const r = await sql`
-        insert into mathrepeat.users (device_id, chat_id, tg_name) values (${arg}::text, ${chat}::bigint, ${name}::text)
-        on conflict (device_id) do update set chat_id = excluded.chat_id, tg_name = excluded.tg_name, enabled = true
-        returning remind_hour`;
+        insert into mathrepeat.people (chat_id, tg_name) values (${chat}::bigint, ${name}::text)
+        on conflict (chat_id) do update set tg_name = excluded.tg_name, enabled = true
+        returning remind_hour, (state is not null) as has_state`;
+      await sql`
+        insert into mathrepeat.devices (device_id, chat_id) values (${arg}::text, ${chat}::bigint)
+        on conflict (device_id) do update set chat_id = excluded.chat_id`;
+      // не больше 5 устройств на человека: самые старые отвязываем
+      await sql`delete from mathrepeat.devices where chat_id = ${chat}::bigint and device_id not in (select device_id from mathrepeat.devices where chat_id = ${chat}::bigint order by created_at desc limit 5)`;
       await tg("sendMessage", {
         chat_id: chat,
-        text: `✅ Подключено!\n\nКаждый день в ${hh(r[0].remind_hour)} напишу, сколько карточек пора повторить и какая тема проседает. Если уже позанимались или повторять нечего, не побеспокою.\n\nВыберите удобное время:`,
+        text: `✅ Подключено!\n\nКаждый день в ${hh(r[0].remind_hour)} напишу, сколько карточек пора повторить и какая тема проседает. Если уже позанимались или повторять нечего, не побеспокою.\n\n` +
+          (r[0].has_state ? "Ваш прогресс с другого устройства появится на сайте, как только вы на него вернётесь.\n\n" : "Прогресс теперь сохраняется: подключите этот же Telegram на другом устройстве, и он перенесётся.\n\n") +
+          "Вы участвуете в рейтинге группы под своим именем из Telegram. Изменить имя или скрыться можно на сайте во вкладке «Рейтинг».\n\nВыберите удобное время:",
         reply_markup: hourKeyboard(),
       });
       await tg("sendMessage", { chat_id: chat, text: "Теперь вернитесь на сайт: он передаст мне расписание ваших карточек.", reply_markup: { inline_keyboard: [[{ text: "Вернуться на сайт", url: site }]] } });
     } else {
       const r = await mine();
-      if (r.length) await tg("sendMessage", { chat_id: chat, text: `Вы уже подключены, напоминаю в ${hh(r[0].remind_hour)}.\n/time — изменить время\n/status — сколько карточек ждёт\n/stop — выключить напоминания` });
+      if (r.length) await tg("sendMessage", { chat_id: chat, text: `Вы уже подключены, напоминаю в ${hh(r[0].remind_hour)}.\n/time — изменить время\n/status — сколько карточек ждёт\n/top — рейтинг группы\n/stop — выключить напоминания` });
       else await notLinked();
     }
     return;
@@ -159,10 +218,10 @@ async function onUpdate(u: any) {
   if (command === "/time") {
     await tg("sendMessage", { chat_id: chat, text: `Сейчас напоминаю в ${hh(me.remind_hour)}. Выберите новое время:`, reply_markup: hourKeyboard() });
   } else if (command === "/stop") {
-    await sql`update mathrepeat.users set enabled = false where chat_id = ${chat}::bigint`;
+    await sql`update mathrepeat.people set enabled = false where chat_id = ${chat}::bigint`;
     await tg("sendMessage", { chat_id: chat, text: "Напоминания выключены. Включить снова: /on" });
   } else if (command === "/on") {
-    await sql`update mathrepeat.users set enabled = true where chat_id = ${chat}::bigint`;
+    await sql`update mathrepeat.people set enabled = true where chat_id = ${chat}::bigint`;
     await tg("sendMessage", { chat_id: chat, text: `Напоминания включены, пишу в ${hh(me.remind_hour)}.` });
   } else if (command === "/status") {
     const total = me.due + Math.min(me.new_per_day, me.unseen);
@@ -170,8 +229,15 @@ async function onUpdate(u: any) {
       ? `Сейчас ждёт ${total} ${cards(total)}: это примерно ${minutes(total)} мин.` + (me.weak ? `\n🎯 Слабая тема: ${me.weak}` : "")
       : "Сейчас повторять нечего 👍";
     await tg("sendMessage", { chat_id: chat, text, reply_markup: playButton(site) });
+  } else if (command === "/top") {
+    const rows = (await topRows(10)).filter((x) => x.week > 0);
+    const medal = ["🥇", "🥈", "🥉"];
+    const text = rows.length
+      ? "🏆 Рейтинг группы за 7 дней\n\n" + rows.map((x, i) => `${medal[i] || (i + 1) + "."} ${x.nick} — ${x.week} XP` + (String(x.chat_id) === String(chat) ? "  ← вы" : "")).join("\n")
+      : "За последние 7 дней пока никто не занимался. Станьте первым!";
+    await tg("sendMessage", { chat_id: chat, text, reply_markup: playButton(site) });
   } else {
-    await tg("sendMessage", { chat_id: chat, text: "Команды:\n/status — сколько карточек ждёт\n/time — время напоминания\n/stop — выключить\n/on — включить" });
+    await tg("sendMessage", { chat_id: chat, text: "Команды:\n/status — сколько карточек ждёт\n/top — рейтинг группы\n/time — время напоминания\n/stop — выключить\n/on — включить" });
   }
 }
 
@@ -183,13 +249,17 @@ async function cron() {
   const rows = await sql`
     with u as (
       select *, ((now() at time zone 'utc') + make_interval(mins => tz_offset_min)) as local_ts
-      from mathrepeat.users where chat_id is not null and enabled
+      from mathrepeat.people where enabled
+    ), ranked as (
+      select chat_id, rank() over (order by mathrepeat.week_xp(xp_days, ${sql.unsafe(TODAY)}) desc) as place,
+        mathrepeat.week_xp(xp_days, ${sql.unsafe(TODAY)}) as week, count(*) over () as total
+      from mathrepeat.people where show_top
     )
-    select device_id, chat_id, weak, streak, unseen, new_per_day,
+    select u.chat_id, weak, streak, unseen, new_per_day, r.place::int as place, r.week, r.total::int as total,
       (select count(*)::int from unnest(due_times) t where t <= extract(epoch from now())) as due,
       to_char(local_ts, 'YYYY-MM-DD') as local_day,
       case when last_study_day is null then null else (local_ts::date - last_study_day) end as idle
-    from u
+    from u left join ranked r using (chat_id)
     where extract(hour from local_ts)::int = remind_hour
       and (last_sent_day is null or last_sent_day < local_ts::date)
       and (last_study_day is null or last_study_day < local_ts::date)`;
@@ -209,12 +279,13 @@ async function cron() {
     if (u.weak) lines.push(`🎯 Слабая тема: ${u.weak}`);
     if (idle === 1 && u.streak >= 2) lines.push(`🔥 Серия ${u.streak} ${days(u.streak)} — не потеряйте её!`);
     else if (idle !== null && idle >= 3) lines.push(`Вы не заходили ${idle} ${days(idle)}: материал как раз начинает забываться. Хватит и 3 минут.`);
+    if (u.total > 1 && u.place) lines.push(u.week > 0 ? `🏆 В рейтинге группы вы на ${u.place} месте из ${u.total}` : `🏆 В рейтинге группы уже ${u.total} чел. — на этой неделе у вас пока 0 XP`);
     const r = await tg("sendMessage", { chat_id: u.chat_id, text: lines.join("\n"), reply_markup: playButton(site) });
     if (r.ok) {
       sent++;
-      await sql`update mathrepeat.users set last_sent_day = ${u.local_day}::date where device_id = ${u.device_id}::text`;
+      await sql`update mathrepeat.people set last_sent_day = ${u.local_day}::date where chat_id = ${u.chat_id}::bigint`;
     } else if (r.error_code === 403) { // бота заблокировали
-      await sql`update mathrepeat.users set enabled = false where device_id = ${u.device_id}::text`;
+      await sql`update mathrepeat.people set enabled = false where chat_id = ${u.chat_id}::bigint`;
     }
   }
   return json({ sent, checked: rows.length });
@@ -231,10 +302,14 @@ async function setup() {
   const wh = await tg("setWebhook", { url: hook, secret_token: c.webhook_secret, allowed_updates: ["message", "callback_query"], drop_pending_updates: true });
   await tg("setMyCommands", { commands: [
     { command: "status", description: "Сколько карточек ждёт" },
+    { command: "top", description: "Рейтинг группы" },
     { command: "time", description: "Время напоминания" },
     { command: "stop", description: "Выключить напоминания" },
     { command: "on", description: "Включить напоминания" },
   ] });
+  await tg("setMyName", { name: "Мат-повтор: математика без забывания" });
+  await tg("setMyShortDescription", { short_description: "Напоминаю повторять лекции по математике: 3 минуты в день, чтобы не забывать." });
+  await tg("setMyDescription", { description: "Напоминаю, когда пора повторить лекции по математике, показываю слабую тему и рейтинг группы. Подключается с сайта: «Подключить Telegram»." });
   cfgAt = 0;
   return json({ ok: !!wh.ok, bot: me.result.username, webhook: hook, error: wh.ok ? undefined : wh.description });
 }
@@ -249,6 +324,7 @@ Deno.serve(async (req: Request) => {
     }
     if (req.method !== "POST") return json({ error: "not found" }, 404);
     if (route === "sync") return await sync(await req.json());
+    if (route === "top") return await top(await req.json());
     if (route === "bot") {
       const c = await cfg();
       if (!c.webhook_secret || req.headers.get("x-telegram-bot-api-secret-token") !== c.webhook_secret) return json({ error: "forbidden" }, 403);
