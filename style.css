@@ -191,3 +191,4 @@ button.primary,button.ghost,button.danger,.filebtn{display:inline-block;border-r
 /* v13: вопрос с карточки в объяснении */
 .lsblock.ask{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--panel))}
 #lsAll{display:block;margin:4px auto 10px}
+.fig .dotb{fill:var(--bad);stroke:none}.fig .dotn{fill:currentColor;opacity:.3;stroke:none}
