@@ -126,3 +126,46 @@ button.primary,button.ghost,button.danger,.filebtn{display:inline-block;border-r
 #gResult .dres{text-align:left;margin:14px 0 6px}
 #gResult .note{margin:10px 0;font-size:16px}
 #gResult .primary,#gResult .ghost{display:block;width:100%;margin:10px 0 0;padding:14px;font-size:16px}
+
+/* v11: три режима и объяснения тем */
+.mode{display:block;width:100%;text-align:left;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin:8px 0 0}
+.mode b{display:block;font-size:16px}
+.mode span{display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.mode.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.sheet{max-height:92vh;overflow-y:auto}
+.lesson{z-index:40}
+.lsmeta{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 2px;font-size:13px}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex-shrink:0}
+.seg button{background:transparent;border:0;color:var(--muted);padding:6px 10px;font-size:13px}
+.seg button.on{background:var(--accent);color:#fff}
+.lsbody{flex:1;padding-bottom:8px}
+.lsbody h2{font-size:22px;margin:8px 0 12px}
+.lsblock{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:10px 0;font-size:16px;line-height:1.5;overflow-wrap:anywhere;overflow-x:auto}
+.lslabel{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:5px}
+.lsblock.analogy{border-left:4px solid var(--warn)}
+.lsblock.core{border-left:4px solid var(--accent);font-weight:600}
+.lsblock.example{border-left:4px solid var(--good)}
+.lsblock.warn{border-left:4px solid var(--bad)}
+.lsblock ol{margin:10px 0 0;padding-left:22px}
+.lsblock li{margin:6px 0}
+.lsans{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);color:var(--good);font-weight:600}
+.lsfig{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px;margin:10px 0}
+.lsnav{display:flex;gap:8px;position:sticky;bottom:0;background:var(--bg);padding:10px 0 4px}
+.lsnav .ghost{flex:0 0 auto;margin:0}
+.lsnav .primary{flex:1;margin:0;padding:14px;font-size:16px}
+.lsnav button:disabled{opacity:.4}
+#gExplain{display:block;margin:10px auto 0}
+.fig{display:block;width:100%;height:auto;color:var(--text)}
+.fig text{font:13px system-ui,sans-serif;fill:currentColor}
+.fig text.b{font-weight:700}
+.fig .ta{fill:var(--accent)}.fig .tg{fill:var(--good)}.fig .tb{fill:var(--bad)}
+.fig line,.fig path,.fig rect.ln,.fig polygon.ln,.fig circle.ln{stroke:currentColor;stroke-width:2;fill:none}
+.fig .ac{stroke:var(--accent)}.fig .gd{stroke:var(--good)}.fig .bd{stroke:var(--bad)}
+.fig polygon.ln{fill:none}
+.fig line+polygon.ln{fill:currentColor}
+.fig polygon.ac{fill:var(--accent);stroke:var(--accent)}.fig polygon.gd{fill:var(--good);stroke:var(--good)}.fig polygon.bd{fill:var(--bad);stroke:var(--bad)}
+.fig .thick{stroke-width:4}
+.fig .dash{stroke-dasharray:6 5}
+.fig .fa{fill:var(--accent);opacity:.2;stroke:none}.fig .fa2{fill:var(--accent);opacity:.35;stroke:none}
+.fig .fg{fill:var(--good);opacity:.2;stroke:none}.fig .fw{fill:var(--warn);opacity:.3;stroke:none}
+.fig .dot{fill:var(--accent);stroke:none}.fig .dotg{fill:var(--good);stroke:none}
