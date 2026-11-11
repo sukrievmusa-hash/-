@@ -115,7 +115,7 @@ async function sync(b: Record<string, unknown>) {
   const out: Record<string, unknown> = { linked: true, hour: rows[0].remind_hour, nick: rows[0].nick, show: rows[0].show_top, rev };
   if (rows[0].class_id) {
     const k = await sql`select name from mathrepeat.classes where id = ${rows[0].class_id}::int`;
-    const t = await sql`select id, lecture, title, note, to_char(due, 'YYYY-MM-DD') as due, to_char(created_at at time zone 'utc', 'YYYY-MM-DD') as day
+    const t = await sql`select id, lecture, title, note, teacher, to_char(due, 'YYYY-MM-DD') as due, to_char(created_at at time zone 'utc', 'YYYY-MM-DD') as day
       from mathrepeat.assignments where class_id = ${rows[0].class_id}::int and created_at > now() - interval '30 days' order by created_at desc limit 10`;
     out.cls = k[0]?.name ?? null; out.tasks = t;
   }
@@ -172,14 +172,14 @@ async function teacher(b: Record<string, unknown>) {
     await sql`delete from mathrepeat.assignments where id = ${Math.floor(Number(b.id)) || 0}::int`;
   } else if (action === "assign") {
     const classId = Math.floor(Number(b.class_id)) || 0;
-    const lecture = cleanText(b.lecture, 40), title = cleanText(b.title, 120), note = cleanText(b.note, 300);
+    const lecture = cleanText(b.lecture, 40), title = cleanText(b.title, 120), note = cleanText(b.note, 300), who = cleanText(b.teacher, 40);
     const due = typeof b.due === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.due) ? b.due : null;
     const k = await sql`select name from mathrepeat.classes where id = ${classId}::int`;
     if (!k.length || !lecture || !title) return json({ error: "bad request" }, 400);
-    await sql`insert into mathrepeat.assignments (class_id, lecture, title, note, due) values (${classId}::int, ${lecture}::text, ${title}::text, ${note || null}::text, ${due}::date)`;
+    await sql`insert into mathrepeat.assignments (class_id, lecture, title, note, due, teacher) values (${classId}::int, ${lecture}::text, ${title}::text, ${note || null}::text, ${due}::date, ${who || null}::text)`;
     const members = await sql`select chat_id from mathrepeat.people where class_id = ${classId}::int and enabled`;
     const site = c.site_url || "";
-    const text = [`Новое задание от преподавателя: ${title}`, due ? `Повторить до ${due.split("-").reverse().join(".")}.` : "Повторите эту тему.", note || "", "Хватит нескольких минут."].filter(Boolean).join("\n");
+    const text = [`Новое задание${who ? " от " + who : " от преподавателя"}: ${title}`, due ? `Повторить до ${due.split("-").reverse().join(".")}.` : "Повторите эту тему.", note || "", "Хватит нескольких минут."].filter(Boolean).join("\n");
     let sent = 0;
     for (const m of members) {
       const r = await tg("sendMessage", { chat_id: m.chat_id, text, reply_markup: { inline_keyboard: [[{ text: "Повторить тему", url: `${site}#task=${encodeURIComponent(lecture)}` }]] } });
@@ -192,7 +192,7 @@ async function teacher(b: Record<string, unknown>) {
 }
 async function teacherList() {
   const classes = await sql`select k.id, k.name, k.code, (select count(*)::int from mathrepeat.people p where p.class_id = k.id) as members from mathrepeat.classes k order by k.name`;
-  const tasks = await sql`select id, class_id, lecture, title, note, to_char(due, 'YYYY-MM-DD') as due, to_char(created_at at time zone 'utc', 'YYYY-MM-DD') as day
+  const tasks = await sql`select id, class_id, lecture, title, note, teacher, to_char(due, 'YYYY-MM-DD') as due, to_char(created_at at time zone 'utc', 'YYYY-MM-DD') as day
     from mathrepeat.assignments order by created_at desc limit 30`;
   return { classes, tasks };
 }

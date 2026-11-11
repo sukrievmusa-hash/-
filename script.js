@@ -714,7 +714,7 @@ function renderClass() {
     const row = document.createElement('div'); row.className = 'taskrow';
     const tx = document.createElement('div'); tx.className = 't';
     const b = document.createElement('b'); b.textContent = t.title; tx.append(b);
-    const sub = [t.due ? 'до ' + t.due.split('-').reverse().join('.') : '', t.note || ''].filter(Boolean).join(' · ');
+    const sub = [t.teacher || '', t.due ? 'до ' + t.due.split('-').reverse().join('.') : '', t.note || ''].filter(Boolean).join(' · ');
     if (sub) { const sp = document.createElement('span'); sp.textContent = sub; tx.append(sp); }
     const go = document.createElement('button'); go.className = 'primary'; go.textContent = 'Повторить';
     go.onclick = () => openSheet({ t: 'lec', id: t.lecture });

@@ -29,6 +29,7 @@
   <div id="work" hidden>
     <div class="panel">
       <h3>Назначить тему классу</h3>
+      <input id="me" maxlength="40" placeholder="Ваше имя, например: Айгерим Н." autocomplete="name">
       <select id="cls"></select>
       <select id="lec"></select>
       <textarea id="note" rows="2" maxlength="300" placeholder="Комментарий (необязательно), например: к практике в четверг"></textarea>
@@ -56,7 +57,7 @@
 <script src="config.js"></script>
 <script>
 const $ = (s) => document.querySelector(s), API = window.MR_CONFIG.api;
-let CODE = '', DATA = { classes: [], tasks: [] };
+let ME = '', CODE = '', DATA = { classes: [], tasks: [] };
 const lecs = (window.BUILTIN_LECTURES || []).map((l) => ({ id: 'b-' + l.id, title: l.title }));
 $('#lec').innerHTML = lecs.map((l) => `<option value="${l.id}">${l.title.replace(/[<>&"]/g, '')}</option>`).join('');
 
@@ -82,7 +83,7 @@ function draw() {
   DATA.tasks.forEach((k) => {
     const cn = (DATA.classes.find((c) => c.id === k.class_id) || {}).name || '';
     const row = el('div', null, 'tbl'), t = el('div', null, 't');
-    t.append(el('b', k.title), el('span', [cn, k.day, k.due ? 'до ' + k.due : '', k.note || ''].filter(Boolean).join(' · ')));
+    t.append(el('b', k.title), el('span', [k.teacher, cn, k.day, k.due ? 'до ' + k.due : '', k.note || ''].filter(Boolean).join(' · ')));
     const del = el('button', 'Убрать', 'ghost'); del.onclick = async () => { DATA = await call({ action: 'unassign', id: k.id }); draw(); };
     row.append(t, del); tl.append(row);
   });
@@ -105,14 +106,17 @@ $('#addCls').onclick = async () => {
 };
 $('#assign').onclick = async () => {
   const cid = +$('#cls').value, lec = $('#lec').value; if (!cid || !lec) return;
+  if (!$('#me').value.trim()) { $('#res').textContent = 'Впишите своё имя: студенты увидят, от кого задание.'; $('#res').hidden = false; $('#me').focus(); return; }
   const title = lecs.find((l) => l.id === lec).title, b = $('#assign'); b.disabled = true;
   try {
-    const d = await call({ action: 'assign', class_id: cid, lecture: lec, title, note: $('#note').value, due: $('#due').value || null });
+    const d = await call({ action: 'assign', class_id: cid, lecture: lec, title, note: $('#note').value, due: $('#due').value || null, teacher: $('#me').value.trim() });
     DATA = d; draw();
     $('#res').textContent = `Задание назначено. Сообщение в Telegram получили ${d.sent} из ${d.members} студентов.`; $('#res').hidden = false; $('#note').value = '';
   } catch (e) { $('#res').textContent = 'Не получилось назначить.'; $('#res').hidden = false; }
   b.disabled = false;
 };
+try { $('#me').value = localStorage.getItem('mr_teacher_name') || ''; } catch (e) {}
+$('#me').addEventListener('input', () => { try { localStorage.setItem('mr_teacher_name', $('#me').value.trim()); } catch (e) {} });
 try { const c = localStorage.getItem('mr_teacher'); if (c) enter(c, true); } catch (e) {}
 </script>
 </body>
