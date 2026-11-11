@@ -47,6 +47,28 @@ alter table mathrepeat.devices enable row level security;
 alter table mathrepeat.config enable row level security;
 revoke all on all tables in schema mathrepeat from anon, authenticated;
 
+-- классы и задания преподавателя
+create table if not exists mathrepeat.classes (
+  id         serial primary key,
+  name       text not null unique check (char_length(name) between 1 and 60),
+  code       text not null unique,            -- код, по которому студенты входят в класс
+  created_at timestamptz not null default now()
+);
+alter table mathrepeat.people add column if not exists class_id int references mathrepeat.classes (id) on delete set null;
+create table if not exists mathrepeat.assignments (
+  id         serial primary key,
+  class_id   int not null references mathrepeat.classes (id) on delete cascade,
+  lecture    text not null,                   -- id лекции на сайте, например b-l10
+  title      text not null,
+  note       text,
+  due        date,
+  created_at timestamptz not null default now()
+);
+create index if not exists assignments_class_idx on mathrepeat.assignments (class_id, created_at desc);
+alter table mathrepeat.classes enable row level security;
+alter table mathrepeat.assignments enable row level security;
+revoke all on all tables in schema mathrepeat from anon, authenticated;
+
 -- очки за последние 7 дней
 create or replace function mathrepeat.week_xp(days jsonb, today date) returns int
 language sql immutable set search_path = '' as $$
@@ -58,6 +80,7 @@ $$;
 insert into mathrepeat.config (key, value) values
   ('cron_secret',    replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')),
   ('webhook_secret', replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')),
+  ('teacher_code',  replace(gen_random_uuid()::text, '-', '')),
   ('site_url',       'https://sukrievmusa-hash.github.io/-/')
 on conflict (key) do nothing;
 

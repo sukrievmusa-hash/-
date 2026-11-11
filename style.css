@@ -211,3 +211,10 @@ button.primary,button.ghost,button.danger,.filebtn{border-radius:8px}
 #gHearts{font-size:13px;color:var(--muted);letter-spacing:0;white-space:nowrap}
 #openCards{display:block;margin:0 0 4px}
 #weakHome .ghost{display:block;width:100%;margin-top:10px;padding:12px}
+
+/* v18: задания преподавателя */
+.taskrow{display:flex;align-items:center;gap:10px;padding:8px 0}
+.taskrow .t{flex:1;min-width:0}
+.taskrow .t b{display:block}
+.taskrow .t span{display:block;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.taskpanel{border-color:var(--accent)}
