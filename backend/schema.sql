@@ -62,8 +62,10 @@ create table if not exists mathrepeat.assignments (
   title      text not null,
   note       text,
   due        date,
+  teacher    text,                            -- имя преподавателя, назначившего задание
   created_at timestamptz not null default now()
 );
+alter table mathrepeat.assignments add column if not exists teacher text;
 create index if not exists assignments_class_idx on mathrepeat.assignments (class_id, created_at desc);
 alter table mathrepeat.classes enable row level security;
 alter table mathrepeat.assignments enable row level security;
