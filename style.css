@@ -105,3 +105,24 @@ button.primary,button.ghost,button.danger,.filebtn{display:inline-block;border-r
 .weak{background:rgba(239,91,107,.14);color:var(--text);border-left:3px solid var(--bad);border-radius:8px;padding:9px 11px;margin-bottom:6px;font-weight:600;font-size:14px}
 .subh{margin:14px 0 2px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 #tab-progress .primary{width:100%;margin-top:14px;padding:13px}
+
+/* v9: быстрый раунд, слабая сторона, диагностика, поддержка, Telegram */
+.center{text-align:center}
+#playHint{margin:-2px 0 8px}
+.weakrow{display:flex;align-items:center;gap:10px;background:rgba(239,91,107,.12);border-left:3px solid var(--bad);border-radius:10px;padding:10px 11px;margin:8px 0}
+.weakrow.mid{background:rgba(245,184,75,.14);border-left-color:var(--warn)}
+.weakrow .t{flex:1;min-width:0}
+.weakrow .t b{display:block;font-size:15px}
+.weakrow .t span{display:block;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.weakrow button{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:9px 12px;font-weight:600;white-space:nowrap}
+#weakHome .primary{display:block;width:100%;margin-top:10px;padding:13px}
+#weakHome .linkbtn{margin-top:8px}
+.linkbtn{background:transparent;border:0;color:var(--accent);padding:6px 0;font-size:14px;text-decoration:underline}
+.tgcall{border-color:var(--accent)}
+.tgcall .primary{display:block;width:100%;margin-top:10px;padding:12px}
+.supnum{font-size:26px;font-weight:800;letter-spacing:.02em;margin:2px 0 4px;user-select:all}
+.suplabel{margin-top:14px}
+.dcount{font-size:14px;color:var(--muted);white-space:nowrap}
+#gResult .dres{text-align:left;margin:14px 0 6px}
+#gResult .note{margin:10px 0;font-size:16px}
+#gResult .primary,#gResult .ghost{display:block;width:100%;margin:10px 0 0;padding:14px;font-size:16px}
