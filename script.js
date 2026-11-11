@@ -256,6 +256,9 @@ function renderWeakHome() {
 let openSec = 0;
 function renderTopics() {
   const box = $('#topics'); box.innerHTML = '';
+  const lt = $('#lastTopic'), ll = LECS.find((l) => l.id === S.lastLec);
+  lt.hidden = !ll;
+  if (ll) { lt.textContent = 'Последняя тема: ' + lecLabel(ll.title); lt.onclick = () => openSheet({ t: 'lec', id: ll.id }); }
   const secs = Object.keys(SEC_NAMES).map(Number);
   if (!openSec) openSec = secs.find((k) => dueCards({ t: 'sec', id: k }).length) || secs[0] || 0;
   const pill = (st) => { // число — сколько карточек пора ПОВТОРИТЬ; «новое» — есть неизученные; ✓ — всё в порядке
@@ -293,7 +296,7 @@ function renderTopics() {
 
 /* ---------- выбор: повторить или практика ---------- */
 let sheetScope = null;
-function openSheet(sc) { sheetScope = sc; refreshSheet(); $('#sheet').hidden = false; }
+function openSheet(sc) { if (sc.t === 'lec') { S.lastLec = sc.id; save(); } sheetScope = sc; refreshSheet(); $('#sheet').hidden = false; }
 function closeSheet() { $('#sheet').hidden = true; }
 function refreshSheet() {
   const sc = sheetScope, all = S.cards.filter((c) => inScope(c, sc));
