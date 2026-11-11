@@ -5,14 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Математика: повторение-игра</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236c7bff'/%3E%3Ctext x='32' y='46' font-size='40' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%91%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
 <script defer src="vendor/katex/katex.min.js"></script>
 <script defer src="vendor/katex/contrib/auto-render.min.js"></script>
-<script defer src="config.js?v=10"></script>
+<script defer src="config.js?v=12"></script>
 <script defer src="lectures.js?v=8"></script>
 <script defer src="lessons.js?v=11"></script>
-<script defer src="script.js?v=11"></script>
+<script defer src="checks.js?v=12"></script>
+<script defer src="script.js?v=12"></script>
 </head>
 <body>
 
@@ -28,8 +29,9 @@
 <nav class="tabs">
   <button data-tab="home" class="active">Главная</button>
   <button data-tab="progress">Прогресс</button>
+  <button data-tab="top">Рейтинг</button>
   <button data-tab="cards">Карточки</button>
-  <button data-tab="settings">Настройки</button>
+  <button data-tab="settings" aria-label="Настройки" class="icon">⚙️</button>
 </nav>
 
 <main>
@@ -42,6 +44,7 @@
       <button id="playBtn" class="primary">⚡ Быстрый раунд</button>
       <div class="muted small" id="playHint"></div>
       <button id="playFull" class="ghost">Полный раунд</button>
+      <div class="goalrow"><div class="bar"><div id="goalBar"></div></div><div class="muted small" id="goalText"></div></div>
     </div>
 
     <div class="panel tgcall" id="tgHome" hidden>
@@ -59,17 +62,6 @@
       <h3>Выбрать тему</h3>
       <div class="muted small legend">Нажмите на лекцию и выберите, как вы её поняли: объяснить подробно, объяснить коротко или только повторять.</div>
       <div id="topics"></div>
-    </div>
-
-    <div class="panel">
-      <h3>Цель на сегодня</h3>
-      <div class="bar"><div id="goalBar"></div></div>
-      <div class="muted"><span id="goalText"></span></div>
-    </div>
-
-    <div class="panel">
-      <h3>Что придёт в ближайшие 7 дней</h3>
-      <div id="forecast" class="forecast"></div>
     </div>
 
     <div class="panel center">
@@ -92,12 +84,35 @@
       <div id="lvList"></div>
     </div>
     <div class="panel">
+      <h3>Что придёт в ближайшие 7 дней</h3>
+      <div id="forecast" class="forecast"></div>
+    </div>
+    <div class="panel">
       <h3>Где чаще всего ошибаетесь</h3>
       <div id="errEmpty" class="muted">Пока мало данных. Сыграйте несколько раундов, и здесь появится, какие темы вам даются хуже всего.</div>
       <div id="errList"></div>
       <h3 id="hardHead" class="subh" hidden>Самые трудные карточки</h3>
       <div id="hardList"></div>
       <button id="weakBtn" class="primary" hidden>🎯 Тренировать слабые места</button>
+    </div>
+  </section>
+
+  <!-- РЕЙТИНГ -->
+  <section id="tab-top" class="tab">
+    <div class="panel">
+      <h3>🏆 Рейтинг группы за 7 дней</h3>
+      <div class="muted small legend">Очки (XP) за последние 7 дней. Обновляется после каждого раунда.</div>
+      <div id="topList"></div>
+      <div id="topJoin" hidden>
+        <div class="muted small">Чтобы попасть в рейтинг и видеть одногруппников, подключите Telegram. Заодно прогресс перестанет зависеть от одного браузера.</div>
+        <button class="primary tgConnect">Подключить Telegram</button>
+      </div>
+    </div>
+    <div class="panel" id="topMe" hidden>
+      <h3>Моё имя в рейтинге</h3>
+      <input id="nickInput" maxlength="20" placeholder="Имя">
+      <label class="row"><input id="showInput" type="checkbox"> Показывать меня в рейтинге</label>
+      <button id="nickSave" class="ghost">Сохранить</button>
     </div>
   </section>
 
@@ -123,6 +138,7 @@
       <p class="muted small" id="tgInfo"></p>
       <button class="primary tgConnect" id="tgBtn">Подключить Telegram</button>
       <button id="tgOff" class="ghost" hidden>Отключить</button>
+      <p class="muted small" id="tgSyncInfo" hidden>Прогресс сохраняется на сервере. Чтобы продолжить на другом устройстве, откройте там сайт и подключите этот же Telegram.</p>
     </div>
     <div class="panel">
       <h3>Напоминания в браузере</h3>
@@ -132,7 +148,7 @@
     </div>
     <div class="panel">
       <h3>Резервная копия</h3>
-      <p class="muted small">Данные хранятся в этом браузере. Сделайте копию, чтобы перенести их на другое устройство.</p>
+      <p class="muted small">Без Telegram данные хранятся только в этом браузере. Копия пригодится, чтобы перенести их вручную.</p>
       <button id="exportBtn" class="ghost">Скачать копию (JSON)</button>
       <label class="ghost filebtn">Загрузить копию<input id="importFile" type="file" accept="application/json" hidden></label>
       <button id="resetBtn" class="danger">Удалить все данные</button>
@@ -156,7 +172,9 @@
       <div id="gQ" class="q"></div>
       <div id="gA" class="a" hidden></div>
     </div>
+    <div id="gOpts" class="opts" hidden></div>
     <button id="gShow" class="primary">Показать ответ</button>
+    <button id="gNext" class="primary" hidden>Дальше →</button>
     <button id="gExplain" class="linkbtn" hidden>📖 Не понимаю — объясните тему</button>
     <div id="gGrades" class="grades" hidden>
       <button data-g="0" class="g0">Забыл<small></small></button>
