@@ -24,10 +24,14 @@ let S = (() => {
 S.stats.newLog = S.stats.newLog || {};
 S.builtinSeen = S.builtinSeen || [];
 if (S.settings.newPerDay == null) S.settings.newPerDay = 15;
+const CFG = window.MR_CONFIG || {};
+S.tg = S.tg || { id: '', linked: false, bot: '', botAt: 0, hour: 19 };
 const save = () => localStorage.setItem(KEY, JSON.stringify(S));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const dayKey = (d = new Date()) => d.toLocaleDateString('sv');
 const level = (xp) => Math.floor(Math.sqrt(xp / 60)) + 1;
+const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const QUICK = 5, FULL = 10; // карточек в быстром и полном раунде
 
 /* ---------- планировщик (упрощённый SM-2) ---------- */
 function schedule(c, g) { // g: 0 забыл, 1 трудно, 2 помню, 3 легко
@@ -143,8 +147,14 @@ function refresh() {
   $('#dueSplit').textContent = parts.length
     ? 'Сегодня: ' + parts.slice(0, 4).join(', ') + (parts.length > 4 ? ` и ещё ${parts.length - 4}` : '')
     : (S.cards.some((c) => !c.seen) ? 'На сегодня всё повторено ✓ Норма новых карточек выполнена' : 'На сегодня всё повторено ✓');
-  const pb = $('#playBtn');
-  pb.textContent = due ? '▶ Повторить на сегодня' : extraNewCards(ALL).length ? '➕ Выучить ещё 10 новых карточек' : '▶ Практика по всем темам';
+  const more = extraNewCards(ALL).length, n = due || more || S.cards.length;
+  $('#playBtn').textContent = due ? '⚡ Быстрый раунд' : more ? '⚡ Выучить 5 новых карточек' : '⚡ Быстрая практика';
+  $('#playBtn').disabled = !S.cards.length;
+  $('#playHint').textContent = `${Math.min(QUICK, n)} ${plural(Math.min(QUICK, n))} · примерно 3 минуты`;
+  $('#playFull').hidden = n <= QUICK;
+  $('#playFull').textContent = due ? `Полный раунд · ${Math.min(FULL, due)} ${plural(Math.min(FULL, due))}` : more ? `Выучить ещё ${Math.min(FULL, more)} новых` : 'Практика · 10 карточек';
+  renderWeakHome();
+  renderTg();
   renderTopics();
   renderProgress();
   if (!$('#sheet').hidden) refreshSheet();
@@ -192,7 +202,46 @@ function scopeStats(sc) {
   const fresh = Math.min(all.length - seen, newLeft());
   const level = all.length ? all.reduce((a, c) => a + cardLevel(c), 0) / all.length : 0;
   const ok = all.reduce((a, c) => a + (c.ok || 0), 0), bad = all.reduce((a, c) => a + (c.bad || 0), 0);
-  return { total: all.length, seen, rev, fresh, due: rev + fresh, level, ok, bad, answers: ok + bad, errRate: ok + bad ? bad / (ok + bad) : 0 };
+  const hard = all.reduce((a, c) => a + (c.hard || 0), 0);
+  // sure — доля уверенных ответов: «Забыл» = 0, «Трудно» = 0.5, «Помню»/«Легко» = 1
+  return { total: all.length, seen, rev, fresh, due: rev + fresh, level, ok, bad, hard, answers: ok + bad, errRate: ok + bad ? bad / (ok + bad) : 0, sure: ok + bad ? 1 - (bad + 0.5 * hard) / (ok + bad) : 1 };
+}
+/* слабые лекции: меньше всего уверенных ответов (нужно хотя бы 2 ответа по лекции) */
+function weakLectures() {
+  return LECS.map((l) => ({ l, sc: { t: 'lec', id: l.id }, st: scopeStats({ t: 'lec', id: l.id }) }))
+    .filter((x) => x.st.answers >= 2).sort((a, b) => a.st.sure - b.st.sure);
+}
+function weakestTitle() { const w = weakLectures()[0]; return w && w.st.sure < 0.7 ? w.l.title : ''; }
+/* тренировка темы: сначала то, что пора повторить и новое, иначе практика */
+function trainScope(sc) {
+  if (dueCards(sc).length) startGame(false, sc);
+  else if (extraNewCards(sc).length) startGame(false, sc, true);
+  else startGame(true, sc);
+}
+function renderWeakHome() {
+  const box = $('#weakHome'); box.innerHTML = '';
+  const rows = weakLectures(), weak = rows.filter((x) => x.st.sure < 0.7).slice(0, 2);
+  const text = (t) => { const d = document.createElement('div'); d.className = 'muted small'; d.textContent = t; box.append(d); };
+  const btn = (cls, t, fn) => { const b = document.createElement('button'); b.className = cls; b.textContent = t; b.onclick = fn; box.append(b); return b; };
+  if (!rows.length) {
+    text('Не знаете, какие темы у вас проседают? Короткий тест — по 2 вопроса из каждой лекции — покажет, где пробелы.');
+    btn('primary', '🔍 Найти слабые места · ~5 минут', startDiag);
+    return;
+  }
+  if (!weak.length) {
+    const lo = rows[0];
+    text(`Явных пробелов не видно 👍 Ниже всего: ${lo.l.title} — уверенных ответов ${Math.round(lo.st.sure * 100)}%.`);
+  }
+  weak.forEach((x) => {
+    const r = document.createElement('div'); r.className = 'weakrow' + (x.st.sure >= 0.5 ? ' mid' : '');
+    const t = document.createElement('div'); t.className = 't';
+    const b = document.createElement('b'); b.textContent = x.l.title;
+    const sp = document.createElement('span'); sp.textContent = `уверенных ответов ${Math.round(x.st.sure * 100)}% (из ${x.st.answers})`;
+    t.append(b, sp);
+    const go = document.createElement('button'); go.textContent = '🎯 Подтянуть'; go.onclick = () => trainScope(x.sc);
+    r.append(t, go); box.append(r);
+  });
+  btn('linkbtn', S.diag ? `Пройти диагностику заново (последняя: ${new Date(S.diag.day + 'T12:00').toLocaleDateString('ru', { day: 'numeric', month: 'long' })})` : 'Проверить все лекции: диагностика ~5 минут', startDiag);
 }
 let openSec = 0;
 function renderTopics() {
@@ -281,7 +330,7 @@ function renderProgress() {
   });
   // где ошибаешься
   const errBox = $('#errList'); errBox.innerHTML = '';
-  const MIN = 3; // мало ответов — статистика ненадёжна
+  const MIN = 2; // мало ответов — статистика ненадёжна (2 ответа даёт диагностика)
   const errRow = (title, sub, st) => prow(title, sub, `${Math.round(st.errRate * 100)}% ошибок`, st.errRate, st.errRate >= .35 ? 'var(--bad)' : st.errRate >= .2 ? 'var(--warn)' : 'var(--good)');
   const secRows = secs.map((k) => ({ k, st: scopeStats({ t: 'sec', id: k }) })).filter((x) => x.st.answers >= MIN).sort((a, b) => b.st.errRate - a.st.errRate);
   const lecRows = LECS.map((l) => ({ l, st: scopeStats({ t: 'lec', id: l.id }) })).filter((x) => x.st.answers >= MIN).sort((a, b) => b.st.errRate - a.st.errRate);
@@ -331,22 +380,40 @@ $('#search').addEventListener('input', renderCards);
 /* ---------- добавление данных ---------- */
 /* ---------- игра ---------- */
 let G = null;
-function startGame(practice, sc = ALL, extra = false, weak = false) {
-  let q = weak ? weakCards(sc) : practice ? practiceCards(sc) : extra ? extraNewCards(sc) : dueCards(sc).slice(0, 10);
+function startGame(practice, sc = ALL, extra = false, weak = false, size = FULL) {
+  const q = (weak ? weakCards(sc) : practice ? practiceCards(sc) : extra ? extraNewCards(sc) : dueCards(sc)).slice(0, size);
   if (!q.length) return;
-  G = { q, total: q.length, i: 0, hearts: 3, combo: 0, bestCombo: 0, xp: 0, right: 0, wrong: 0, practice, extra, weak, scope: sc, lvl: level(S.stats.xp) };
+  launch(q, { practice, extra, weak, scope: sc, size });
+}
+function launch(q, o) {
+  G = Object.assign({ q, total: q.length, i: 0, hearts: 3, combo: 0, bestCombo: 0, xp: 0, right: 0, wrong: 0, practice: false, extra: false, weak: false, diag: false, scope: ALL, size: FULL, lvl: level(S.stats.xp) }, o);
   $('#game').hidden = false; $('#gResult').hidden = true;
   $('.flash').hidden = false;
+  $('#gHearts').className = G.diag ? 'dcount' : 'hearts';
+  $('.gmeta').hidden = false;
   nextCard();
 }
-function hearts() { $('#gHearts').textContent = '❤️'.repeat(G.hearts) + '🖤'.repeat(3 - G.hearts); }
+/* раунд «на сегодня»: повторения и новые, потом ещё новые, потом практика */
+function playToday(size) {
+  if (dueCards(ALL).length) startGame(false, ALL, false, false, size);
+  else if (extraNewCards(ALL).length) startGame(false, ALL, true, false, size);
+  else startGame(true, ALL, false, false, size);
+}
+/* диагностика: по 2 случайные карточки из каждой лекции, без жизней; расписание не сдвигает */
+function startDiag() {
+  const q = [];
+  LECS.forEach((l) => shuffle(S.cards.filter((c) => c.lecture === l.id)).slice(0, 2).forEach((c) => q.push(c)));
+  if (!q.length) return;
+  launch(q, { practice: true, diag: true, res: {} });
+}
+function hearts() { $('#gHearts').textContent = G.diag ? `${Math.min(G.i + 1, G.total)} из ${G.total}` : '❤️'.repeat(G.hearts) + '🖤'.repeat(3 - G.hearts); }
 function nextCard() {
   if (G.i >= G.q.length || G.hearts <= 0) return finish();
   const c = G.q[G.i];
   hearts();
   $('#gBar').style.width = (Math.min(G.i, G.total) / G.total * 100) + '%';
   $('#gCombo').textContent = G.combo >= 2 ? `🔥 комбо ×${G.combo}` : '';
-  $('#gLecture').textContent = (G.weak ? 'Слабые места · ' : G.practice ? 'Практика · ' : 'Повторение · ') + lectureName(c.lecture);
+  $('#gLecture').textContent = (G.diag ? 'Диагностика · ' : G.weak ? 'Слабые места · ' : G.practice ? 'Практика · ' : 'Повторение · ') + lectureName(c.lecture);
   setText($('#gQ'), c.q);
   setText($('#gA'), c.a);
   $('#gA').hidden = true; $('#gShow').hidden = false; $('#gGrades').hidden = true;
@@ -360,8 +427,14 @@ $('#gShow').onclick = () => {
 $$('#gGrades button').forEach((b) => b.addEventListener('click', () => {
   const g = +b.dataset.g, c = G.q[G.i];
   if (g === 0) c.bad = (c.bad || 0) + 1; else c.ok = (c.ok || 0) + 1; // статистика ошибок (и в практике тоже)
+  if (g === 1) c.hard = (c.hard || 0) + 1;
+  if (G.diag) {
+    const r = G.res[c.lecture] = G.res[c.lecture] || { s: 0, n: 0 };
+    r.s += [0, 0.5, 1, 1][g]; r.n++;
+    if (g === 0 && c.seen) c.due = Math.min(c.due, Date.now()); // забытая карточка вернётся в сегодняшнее повторение
+  }
   if (g === 0) {
-    G.wrong++; G.combo = 0; G.hearts--;
+    G.wrong++; G.combo = 0; if (!G.diag) G.hearts--;
     if (!G.practice && !G.q.slice(G.i + 1).includes(c) && G.hearts > 0) G.q.push(c); // вернётся в конце раунда
   } else {
     G.right++; G.combo++; G.bestCombo = Math.max(G.bestCombo, G.combo);
@@ -384,12 +457,32 @@ function bumpDay() {
     S.stats.best = Math.max(S.stats.best || 0, S.stats.streak);
   }
 }
+function finishDiag(r) {
+  const rows = LECS.filter((l) => G.res[l.id]).map((l) => ({ l, p: G.res[l.id].s / G.res[l.id].n })).sort((a, b) => a.p - b.p);
+  S.diag = { day: dayKey(), res: Object.fromEntries(rows.map((x) => [x.l.id, Math.round(x.p * 100)])) };
+  const h = document.createElement('h2'); h.textContent = 'Диагностика готова';
+  const weak = rows.filter((x) => x.p < 0.7), w = weak[0];
+  const note = document.createElement('div'); note.className = 'note';
+  note.textContent = w ? `Слабее всего: ${w.l.title}` + (weak.length > 1 ? ` и ещё ${weak.length - 1}` : '') : 'Слабых мест не нашлось 👍 Продолжайте повторять по расписанию.';
+  const list = document.createElement('div'); list.className = 'dres';
+  rows.forEach((x) => list.append(prow(lecLabel(x.l.title), lecTopic(x.l.title), Math.round(x.p * 100) + '%', x.p, x.p < 0.5 ? 'var(--bad)' : x.p < 0.7 ? 'var(--warn)' : 'var(--good)')));
+  const xp = document.createElement('div'); xp.className = 'muted small'; xp.textContent = `+${G.xp} XP · результат сохранён на главной в блоке «Ваша слабая сторона»`;
+  r.append(h, note, list, xp);
+  if (w) {
+    const go = document.createElement('button'); go.className = 'primary'; go.textContent = `🎯 Подтянуть: ${lecLabel(w.l.title)}`;
+    go.onclick = () => { closeGame(); trainScope({ t: 'lec', id: w.l.id }); };
+    r.append(go);
+  }
+  const home = document.createElement('button'); home.className = 'ghost'; home.textContent = 'На главную'; home.onclick = closeGame;
+  r.append(home);
+}
 function finish() {
   S.stats.xp += G.xp;
   const lvl = level(S.stats.xp), up = lvl > G.lvl;
   save();
-  $('.flash').hidden = true; $('#gShow').hidden = true; $('#gGrades').hidden = true;
+  $('.flash').hidden = true; $('#gShow').hidden = true; $('#gGrades').hidden = true; $('.gmeta').hidden = true;
   const r = $('#gResult'); r.hidden = false; r.innerHTML = '';
+  if (G.diag) { finishDiag(r); G.i = G.q.length; refresh(); tgSync(true); return; }
   const h = document.createElement('h2');
   h.textContent = G.hearts <= 0 ? 'Жизни закончились 💔' : 'Раунд пройден! 🎉';
   const lines = [
@@ -401,23 +494,21 @@ function finish() {
   r.append(h);
   lines.forEach((t) => { const p = document.createElement('div'); p.className = 'stat'; p.textContent = t; r.append(p); });
   const again = document.createElement('button'); again.className = 'primary'; again.textContent = 'Ещё раунд';
-  const wasPractice = G.practice, wasWeak = G.weak, sc = G.scope;
-  again.onclick = () => { closeGame(); if (wasWeak) startGame(true, sc, false, true); else if (wasPractice) startGame(true, sc); else if (dueCards(sc).length) startGame(false, sc); else if (extraNewCards(sc).length) startGame(false, sc, true); };
+  const wasPractice = G.practice, wasWeak = G.weak, sc = G.scope, size = G.size;
+  again.onclick = () => { closeGame(); if (wasWeak) startGame(true, sc, false, true, size); else if (wasPractice) startGame(true, sc, false, false, size); else if (dueCards(sc).length) startGame(false, sc, false, false, size); else if (extraNewCards(sc).length) startGame(false, sc, true, false, size); };
   const home = document.createElement('button'); home.className = 'ghost'; home.textContent = 'На главную';
   home.onclick = closeGame;
   r.append(again, home);
   refresh();
+  tgSync(true);
 }
 function closeGame() {
   if (G && G.i > 0 && G.i < G.q.length && G.hearts > 0) S.stats.xp += G.xp; // досрочный выход сохраняет набранное
   G = null; $('#game').hidden = true; $('.flash').hidden = false; refresh();
 }
 $('#gClose').onclick = closeGame;
-$('#playBtn').onclick = () => {
-  if (dueCards(ALL).length) startGame(false, ALL);
-  else if (extraNewCards(ALL).length) startGame(false, ALL, true);
-  else startGame(true, ALL);
-};
+$('#playBtn').onclick = () => playToday(QUICK);
+$('#playFull').onclick = () => playToday(FULL);
 
 /* ---------- настройки ---------- */
 $('#goalInput').value = S.settings.goal;
@@ -451,6 +542,80 @@ $('#resetBtn').onclick = () => {
   if (confirm('Точно удалить все лекции, карточки и прогресс?')) { localStorage.removeItem(KEY); location.reload(); }
 };
 
+/* ---------- поддержать автора ---------- */
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); return true; } catch (e) {}
+  const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.append(ta); ta.select(); let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  ta.remove(); return ok;
+}
+$$('.supportBtn').forEach((b) => b.addEventListener('click', () => {
+  $('#supKaspi').hidden = !CFG.kaspi; $('#supNum').textContent = CFG.kaspi || '';
+  $('#supCopy').textContent = 'Скопировать номер'; $('#supShare').textContent = 'Поделиться сайтом с одногруппниками';
+  $('#support').hidden = false;
+}));
+$('#supClose').onclick = () => { $('#support').hidden = true; };
+$('#support').addEventListener('click', (e) => { if (e.target.id === 'support') $('#support').hidden = true; });
+$('#supCopy').onclick = async () => {
+  $('#supCopy').textContent = await copyText(CFG.kaspi.replace(/\s/g, '')) ? 'Номер скопирован ✓' : 'Не получилось — скопируйте номер вручную';
+};
+$('#supShare').onclick = async () => {
+  const url = CFG.site || location.href.split('#')[0];
+  if (navigator.share) { try { await navigator.share({ title: 'Мат-повтор', text: 'Повторяем математику по 3 минуты в день, чтобы не забывать лекции', url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  $('#supShare').textContent = await copyText(url) ? 'Ссылка скопирована ✓' : url;
+};
+
+/* ---------- напоминания в Telegram (работают, когда в config.js задан api) ---------- */
+const newId = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => (crypto.getRandomValues(new Uint8Array(1))[0] & 15).toString(16)));
+async function tgApi(path, body) {
+  const r = await fetch(CFG.api + path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined);
+  if (!r.ok) throw new Error('api ' + r.status);
+  return r.json();
+}
+function renderTg() {
+  const on = !!(CFG.api && S.tg.bot);
+  $('#tgPanel').hidden = !on; $('#tgHome').hidden = !on || S.tg.linked;
+  if (!on) return;
+  $('#tgInfo').textContent = S.tg.linked
+    ? `✅ Telegram подключён. Бот напишет в ${String(S.tg.hour).padStart(2, '0')}:00, если есть что повторить. Время меняется командой /time в боте.`
+    : 'Бот сам напишет, когда пора повторить: сколько карточек накопилось и какая тема проседает. Сайт держать открытым не нужно.';
+  $('#tgBtn').textContent = S.tg.linked ? 'Открыть бота' : 'Подключить Telegram';
+  $('#tgOff').hidden = !S.tg.linked;
+}
+async function tgLoadBot() { // имя бота узнаём у сервера и запоминаем на сутки
+  if (!CFG.api) return;
+  if (S.tg.bot && Date.now() - (S.tg.botAt || 0) < DAY) return;
+  try { const d = await tgApi('/info'); S.tg.bot = d.bot || ''; S.tg.botAt = Date.now(); save(); renderTg(); } catch (e) {}
+}
+let tgLast = 0;
+async function tgSync(force) { // отправляем боту только расписание: когда какая карточка «созреет», без текста карточек
+  if (!CFG.api || !S.tg.id) return;
+  if (!force && Date.now() - tgLast < 30e3) return;
+  tgLast = Date.now();
+  try {
+    const d = await tgApi('/sync', {
+      id: S.tg.id, tz: -new Date().getTimezoneOffset(),
+      due: S.cards.filter((c) => c.seen).map((c) => Math.floor(c.due / 1000)),
+      unseen: S.cards.filter((c) => !c.seen).length, newPerDay: S.settings.newPerDay,
+      weak: weakestTitle(), streak: streakNow(), lastDay: S.stats.last || null
+    });
+    S.tg.linked = !!d.linked; if (d.hour != null) S.tg.hour = d.hour;
+    save(); renderTg();
+  } catch (e) {}
+}
+$$('.tgConnect').forEach((b) => b.addEventListener('click', () => {
+  if (!S.tg.bot) return;
+  if (!S.tg.id) { S.tg.id = newId(); save(); }
+  const url = `https://t.me/${S.tg.bot}` + (S.tg.linked ? '' : `?start=${S.tg.id}`);
+  if (!window.open(url, '_blank')) location.href = url;
+}));
+$('#tgOff').onclick = async () => {
+  if (!confirm('Отключить напоминания в Telegram?')) return;
+  try { await tgApi('/sync', { id: S.tg.id, unlink: true }); } catch (e) { return alert('Не получилось связаться с сервером, попробуйте позже'); }
+  S.tg.id = ''; S.tg.linked = false; save(); renderTg();
+};
+
 /* ---------- напоминания, пока сайт открыт ---------- */
 function checkReminder() {
   const due = dueCards().length;
@@ -463,8 +628,17 @@ function checkReminder() {
     new Notification('Пора повторять математику', { body: `Карточек к повтору: ${due}. Заходи в игру!` });
   }
 }
-setInterval(() => { if ($('#game').hidden) refresh(); checkReminder(); }, 60e3);
-document.addEventListener('visibilitychange', () => { if (!document.hidden && $('#game').hidden) refresh(); });
+setInterval(() => { if ($('#game').hidden) refresh(); checkReminder(); tgSync(); }, 60e3);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { if ($('#game').hidden) refresh(); tgSync(true); } });
 
 refresh();
 checkReminder();
+tgLoadBot();
+tgSync(true);
+function goHash() { // ссылка из напоминания (#go) сразу открывает быстрый раунд
+  if (location.hash !== '#go') return;
+  history.replaceState(null, '', location.pathname + location.search);
+  if ($('#game').hidden) playToday(QUICK);
+}
+window.addEventListener('hashchange', goHash);
+goHash();

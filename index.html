@@ -4,12 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Математика: повторение-игра</title>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236c7bff'/%3E%3Ctext x='32' y='46' font-size='40' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%91%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css?v=9">
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
 <script defer src="vendor/katex/katex.min.js"></script>
 <script defer src="vendor/katex/contrib/auto-render.min.js"></script>
+<script defer src="config.js?v=10"></script>
 <script defer src="lectures.js?v=8"></script>
-<script defer src="script.js?v=8"></script>
+<script defer src="script.js?v=9"></script>
 </head>
 <body>
 
@@ -36,7 +38,20 @@
       <div class="due-num"><span id="dueCount">0</span></div>
       <div class="muted">карточек на сегодня</div>
       <div class="today" id="dueSplit"></div>
-      <button id="playBtn" class="primary">▶ Повторить на сегодня</button>
+      <button id="playBtn" class="primary">⚡ Быстрый раунд</button>
+      <div class="muted small" id="playHint"></div>
+      <button id="playFull" class="ghost">Полный раунд</button>
+    </div>
+
+    <div class="panel tgcall" id="tgHome" hidden>
+      <b>🔔 Напоминания в Telegram</b>
+      <div class="muted small">Бот сам напишет, когда пора повторить и какая тема проседает. Сайт держать открытым не нужно.</div>
+      <button class="primary tgConnect">Подключить Telegram</button>
+    </div>
+
+    <div class="panel">
+      <h3>Ваша слабая сторона</h3>
+      <div id="weakHome"></div>
     </div>
 
     <div class="panel">
@@ -53,6 +68,11 @@
     <div class="panel">
       <h3>Что придёт в ближайшие 7 дней</h3>
       <div id="forecast" class="forecast"></div>
+    </div>
+
+    <div class="panel center">
+      <div class="muted small">Сайт бесплатный и без рекламы</div>
+      <button class="ghost supportBtn">💛 Поддержать автора</button>
     </div>
 
   </section>
@@ -96,11 +116,17 @@
       <input id="newInput" type="number" min="0" max="200">
       <p class="muted small">Новые карточки открываются постепенно, чтобы повторения не копились лавиной. Если хотите идти быстрее, увеличьте число.</p>
     </div>
+    <div class="panel" id="tgPanel" hidden>
+      <h3>Напоминания в Telegram</h3>
+      <p class="muted small" id="tgInfo"></p>
+      <button class="primary tgConnect" id="tgBtn">Подключить Telegram</button>
+      <button id="tgOff" class="ghost" hidden>Отключить</button>
+    </div>
     <div class="panel">
-      <h3>Напоминания</h3>
+      <h3>Напоминания в браузере</h3>
       <label class="row">Время напоминания <input id="remindTime" type="time"></label>
       <button id="notifyBtn" class="ghost">Разрешить уведомления</button>
-      <p class="muted small">Уведомление приходит, пока сайт открыт во вкладке (можно закрепить её). Если открыть сайт позже, наверху главной всегда покажется баннер с количеством карточек к повтору.</p>
+      <p class="muted small">Такое уведомление приходит, только пока сайт открыт во вкладке.</p>
     </div>
     <div class="panel">
       <h3>Резервная копия</h3>
@@ -108,6 +134,9 @@
       <button id="exportBtn" class="ghost">Скачать копию (JSON)</button>
       <label class="ghost filebtn">Загрузить копию<input id="importFile" type="file" accept="application/json" hidden></label>
       <button id="resetBtn" class="danger">Удалить все данные</button>
+    </div>
+    <div class="panel center">
+      <button class="ghost supportBtn">💛 Поддержать автора</button>
     </div>
   </section>
 </main>
@@ -144,6 +173,21 @@
     <div id="shInfo" class="muted small"></div>
     <button id="shRepeat" class="primary"></button>
     <button id="shPractice" class="ghost"></button>
+  </div>
+</div>
+
+<!-- ПОДДЕРЖАТЬ АВТОРА -->
+<div id="support" class="sheetwrap" hidden>
+  <div class="sheet">
+    <button id="supClose" class="x" aria-label="Закрыть">✕</button>
+    <h3>💛 Поддержать автора</h3>
+    <div class="muted small">Сайт бесплатный и без рекламы. Если он помогает не забывать математику, автора можно поддержать.</div>
+    <div id="supKaspi">
+      <div class="muted small suplabel">Перевод на Kaspi по номеру</div>
+      <div class="supnum" id="supNum"></div>
+      <button id="supCopy" class="primary">Скопировать номер</button>
+    </div>
+    <button id="supShare" class="ghost">Поделиться сайтом с одногруппниками</button>
   </div>
 </div>
 
