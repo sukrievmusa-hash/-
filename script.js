@@ -313,9 +313,14 @@ $$('#shModes .mode').forEach((b) => b.addEventListener('click', () => {
 
 /* ---------- объяснение темы ---------- */
 let L = null; // { id, depth, i, from }
-function openLesson(id, depth, from) {
+/* какая тема объяснения отвечает на карточку: ключ «лекция|вопрос» -> номер темы */
+const IDEA_OF = {};
+(window.BUILTIN_LECTURES || []).forEach((l) => (LESSONS['b-' + l.id] || []).forEach((it, k) => (it.c || []).forEach((n) => { if (l.cards[n]) IDEA_OF['b-' + l.id + '|' + l.cards[n][0]] = k; })));
+const ideaOf = (c) => IDEA_OF[c.lecture + '|' + c.q];
+function openLesson(id, depth, from, card) {
   if (!LESSONS[id]) return;
-  L = { id, depth: depth === 'mid' ? 'mid' : 'full', i: 0, from: from || '' };
+  const k = card ? ideaOf(card) : undefined;
+  L = { id, depth: depth === 'mid' ? 'mid' : 'full', i: k || 0, from: from || '', card: k != null ? card : null, cardIdea: k };
   $('#lesson').hidden = false; renderLesson();
 }
 function closeLesson() { L = null; $('#lesson').hidden = true; refresh(); }
@@ -331,6 +336,12 @@ function renderLesson() {
     if (label) { const l = document.createElement('div'); l.className = 'lslabel'; l.textContent = label; d.append(l); }
     const t = document.createElement('div'); t.textContent = text; d.append(t); box.append(d); return d;
   };
+  const mine = L.card && L.i === L.cardIdea; // тема, которая объясняет вопрос с карточки
+  if (mine) {
+    const d = add('ask', '❓ Ваш вопрос', L.card.q);
+    const a = document.createElement('div'); a.className = 'lsans'; a.textContent = 'Ответ: ' + L.card.a; d.append(a);
+    const n = document.createElement('div'); n.className = 'muted small'; n.style.marginTop = '8px'; n.textContent = 'Ниже — тема, из которой получается этот ответ.'; d.append(n);
+  }
   const h = document.createElement('h2'); h.textContent = it.t; box.append(h);
   if (full && it.a) add('analogy', '👋 На пальцах', it.a);
   if (it.fig && window.LESSON_FIGS[it.fig]) { const f = document.createElement('div'); f.className = 'lsfig'; f.innerHTML = window.LESSON_FIGS[it.fig](); box.append(f); }
@@ -349,11 +360,14 @@ function renderLesson() {
   renderMath(box);
   const last = L.i === ideas.length - 1;
   $('#lsPrev').disabled = L.i === 0;
-  $('#lsNext').textContent = !last ? 'Дальше →' : L.from === 'game' ? 'Вернуться к карточке' : '✅ Закрепить: 5 карточек';
+  $('#lsNext').textContent = mine ? 'Понятно, вернуться к карточке' : !last ? 'Дальше →' : L.from === 'game' ? 'Вернуться к карточке' : '✅ Закрепить: 5 карточек';
+  $('#lsAll').hidden = !mine || ideas.length < 2;
   $('#lesson').scrollTop = 0;
 }
 $('#lsPrev').onclick = () => { if (L.i > 0) { L.i--; renderLesson(); } };
+$('#lsAll').onclick = () => { L.card = null; L.i = 0; renderLesson(); }; // читать всю лекцию с начала
 $('#lsNext').onclick = () => {
+  if (L.card && L.i === L.cardIdea) return closeLesson();
   if (L.i < LESSONS[L.id].length - 1) { L.i++; renderLesson(); return; }
   const id = L.id, from = L.from; closeLesson();
   if (from !== 'game') trainScope({ t: 'lec', id }, QUICK);
@@ -362,7 +376,7 @@ $('#lsClose').onclick = closeLesson;
 $$('#lesson .seg button').forEach((b) => b.addEventListener('click', () => {
   L.depth = b.dataset.depth; if (L.from !== 'game') { S.modes[L.id] = L.depth; save(); } renderLesson();
 }));
-$('#gExplain').onclick = () => { const c = G.q[G.i]; openLesson(c.lecture, S.modes[c.lecture] === 'mid' ? 'mid' : 'full', 'game'); };
+$('#gExplain').onclick = () => { const c = G.q[G.i]; openLesson(c.lecture, S.modes[c.lecture] === 'mid' ? 'mid' : 'full', 'game', c); };
 $('#shClose').onclick = closeSheet;
 $('#sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') closeSheet(); });
 $('#shRepeat').onclick = () => { const sc = sheetScope; closeSheet(); startGame(false, sc, !dueCards(sc).length); };

@@ -187,3 +187,7 @@ button.primary,button.ghost,button.danger,.filebtn{display:inline-block;border-r
 .toprow.me{background:rgba(108,123,255,.14);border-radius:10px;border-bottom-color:transparent}
 #tab-top .primary{display:block;width:100%;margin-top:10px;padding:13px}
 #topMe .row input{width:auto}
+
+/* v13: вопрос с карточки в объяснении */
+.lsblock.ask{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--panel))}
+#lsAll{display:block;margin:4px auto 10px}
