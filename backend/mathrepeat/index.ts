@@ -205,7 +205,7 @@ async function onUpdate(u: any) {
       await tg("sendMessage", { chat_id: chat, text: "Теперь вернитесь на сайт: он передаст мне расписание ваших карточек.", reply_markup: { inline_keyboard: [[{ text: "Вернуться на сайт", url: site }]] } });
     } else {
       const r = await mine();
-      if (r.length) await tg("sendMessage", { chat_id: chat, text: `Вы уже подключены, напоминаю в ${hh(r[0].remind_hour)}.\n/time — изменить время\n/status — сколько карточек ждёт\n/top — рейтинг группы\n/stop — выключить напоминания` });
+      if (r.length) await tg("sendMessage", { chat_id: chat, text: `Вы уже подключены, напоминаю в ${hh(r[0].remind_hour)}.\n/time — изменить время\n/status — что на сегодня\n/top — рейтинг группы\n/stop — выключить напоминания` });
       else await notLinked();
     }
     return;
@@ -225,9 +225,10 @@ async function onUpdate(u: any) {
     await tg("sendMessage", { chat_id: chat, text: `Напоминания включены, пишу в ${hh(me.remind_hour)}.` });
   } else if (command === "/status") {
     const total = me.due + Math.min(me.new_per_day, me.unseen);
+    // общее число не показываем: большая цифра отбивает желание начинать
     const text = total
-      ? `Сейчас ждёт ${total} ${cards(total)}: это примерно ${minutes(total)} мин.` + (me.weak ? `\n🎯 Слабая тема: ${me.weak}` : "")
-      : "Сейчас повторять нечего 👍";
+      ? (total > 5 ? "Начните с малого: 5 карточек, около 3 минут. Остальное подождёт." : `Сегодня ${total} ${cards(total)}: это около ${minutes(total)} мин.`) + (me.weak ? `\nСлабая тема: ${me.weak}` : "")
+      : "Сейчас повторять нечего.";
     await tg("sendMessage", { chat_id: chat, text, reply_markup: playButton(site) });
   } else if (command === "/top") {
     const rows = (await topRows(10)).filter((x) => x.week > 0);
@@ -237,7 +238,7 @@ async function onUpdate(u: any) {
       : "За последние 7 дней пока никто не занимался. Станьте первым!";
     await tg("sendMessage", { chat_id: chat, text, reply_markup: playButton(site) });
   } else {
-    await tg("sendMessage", { chat_id: chat, text: "Команды:\n/status — сколько карточек ждёт\n/top — рейтинг группы\n/time — время напоминания\n/stop — выключить\n/on — включить" });
+    await tg("sendMessage", { chat_id: chat, text: "Команды:\n/status — что на сегодня\n/top — рейтинг группы\n/time — время напоминания\n/stop — выключить\n/on — включить" });
   }
 }
 
@@ -271,15 +272,15 @@ async function cron() {
     // давно не заходит — пишем раз в неделю, чтобы не надоедать
     if (idle !== null && idle > 7 && idle % 7 !== 0) continue;
     const lines = [
-      "🔔 Пора повторить математику",
+      "Пора повторить математику",
       total > 5
-        ? `Сегодня ждёт ${total} ${cards(total)}. Начните с быстрого раунда: 5 карточек, около 3 минут.`
-        : `Сегодня ждёт ${total} ${cards(total)}: это около ${minutes(total)} мин.`,
+        ? "Начните с быстрого раунда: 5 карточек, около 3 минут. Остальное подождёт."
+        : `Сегодня ${total} ${cards(total)}: это около ${minutes(total)} мин.`,
     ];
-    if (u.weak) lines.push(`🎯 Слабая тема: ${u.weak}`);
-    if (idle === 1 && u.streak >= 2) lines.push(`🔥 Серия ${u.streak} ${days(u.streak)} — не потеряйте её!`);
-    else if (idle !== null && idle >= 3) lines.push(`Вы не заходили ${idle} ${days(idle)}: материал как раз начинает забываться. Хватит и 3 минут.`);
-    if (u.total > 1 && u.place) lines.push(u.week > 0 ? `🏆 В рейтинге группы вы на ${u.place} месте из ${u.total}` : `🏆 В рейтинге группы уже ${u.total} чел. — на этой неделе у вас пока 0 XP`);
+    if (u.weak) lines.push(`Слабая тема: ${u.weak}`);
+    if (idle === 1 && u.streak >= 2) lines.push(`Серия ${u.streak} ${days(u.streak)}: одна короткая сессия её сохранит.`);
+    else if (idle !== null && idle >= 3) lines.push("С возвращением. Ничего не потеряно: хватит и 3 минут.");
+    if (u.total > 1 && u.place) lines.push(u.week > 0 ? `В рейтинге группы вы на ${u.place} месте из ${u.total}` : `В рейтинге группы уже ${u.total} чел. — на этой неделе у вас пока 0 XP`);
     const r = await tg("sendMessage", { chat_id: u.chat_id, text: lines.join("\n"), reply_markup: playButton(site) });
     if (r.ok) {
       sent++;
@@ -301,7 +302,7 @@ async function setup() {
   const hook = `https://${Deno.env.get("SUPABASE_URL")!.replace(/^https?:\/\//, "")}/functions/v1/mathrepeat/bot`;
   const wh = await tg("setWebhook", { url: hook, secret_token: c.webhook_secret, allowed_updates: ["message", "callback_query"], drop_pending_updates: true });
   await tg("setMyCommands", { commands: [
-    { command: "status", description: "Сколько карточек ждёт" },
+    { command: "status", description: "Что на сегодня" },
     { command: "top", description: "Рейтинг группы" },
     { command: "time", description: "Время напоминания" },
     { command: "stop", description: "Выключить напоминания" },

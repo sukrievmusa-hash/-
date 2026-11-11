@@ -147,16 +147,18 @@ function refresh() {
   $('#hXp').textContent = S.stats.xp;
 
   const dl = dueCards(ALL), due = dl.length;
-  $('#dueCount').textContent = due;
-  const by = {}; dl.forEach((c) => { by[c.lecture] = (by[c.lecture] || 0) + 1; });
-  const parts = LECS.filter((l) => by[l.id]).map((l) => `${lecLabel(l.title)} · ${by[l.id]}`);
-  $('#dueSplit').textContent = parts.length
-    ? 'Сегодня: ' + parts.slice(0, 4).join(', ') + (parts.length > 4 ? ` и ещё ${parts.length - 4}` : '')
-    : (S.cards.some((c) => !c.seen) ? 'На сегодня всё повторено Норма новых карточек выполнена' : 'На сегодня всё повторено');
+  const lastDay = S.stats.last, idle = lastDay ? Math.round((Date.parse(dayKey() + 'T12:00') - Date.parse(lastDay + 'T12:00')) / DAY) : 0;
+  const moreNew = extraNewCards(ALL).length, load = due || moreNew || S.cards.length;
+  // человеку показываем только посильный кусок на сегодня, а не весь накопившийся долг
+  $('#dueCount').textContent = Math.min(QUICK, load);
+  $('#dueSplit').textContent = !due
+    ? (S.cards.some((c) => !c.seen) ? 'На сегодня всё повторено. Норма новых карточек выполнена' : 'На сегодня всё повторено')
+    : idle >= 2 ? 'С возвращением! Ничего не потеряно: начните с малого, остальное подождёт'
+    : due > QUICK ? 'Начните с малого, остальное подождёт' : 'Это совсем немного';
   const more = extraNewCards(ALL).length, n = due || more || S.cards.length;
   $('#playBtn').textContent = due ? 'Быстрый раунд' : more ? 'Выучить 5 новых карточек' : 'Быстрая практика';
   $('#playBtn').disabled = !S.cards.length;
-  $('#playHint').textContent = `${Math.min(QUICK, n)} ${plural(Math.min(QUICK, n))} · примерно 3 минуты`;
+  $('#playHint').textContent = `примерно 3 минуты`;
   $('#playFull').hidden = n <= QUICK;
   $('#playFull').textContent = due ? `Полный раунд · ${Math.min(FULL, due)} ${plural(Math.min(FULL, due))}` : more ? `Выучить ещё ${Math.min(FULL, more)} новых` : 'Практика · 10 карточек';
   renderWeakHome();
@@ -167,8 +169,10 @@ function refresh() {
 
   const done = S.stats.log[dayKey()] || 0;
   const goal = S.settings.goal;
-  $('#goalBar').style.width = Math.min(100, done / goal * 100) + '%';
-  $('#goalText').textContent = `Цель на сегодня: ${done} из ${goal}${done >= goal ? ' — выполнена! 🎉' : ''}`;
+  const target = done < QUICK ? QUICK : Math.max(goal, QUICK);
+  $('#goalBar').style.width = Math.min(100, done / target * 100) + '%';
+  $('#goalText').textContent = done < QUICK ? `Минимум на сегодня: ${done} из ${QUICK}`
+    : done < goal ? `Минимум выполнен. Дальше по желанию: ${done} из ${goal}` : 'Цель на сегодня выполнена';
 
   // прогноз на 7 дней
   const f = $('#forecast'); f.innerHTML = '';
@@ -606,7 +610,7 @@ function finish() {
   const r = $('#gResult'); r.hidden = false; r.innerHTML = '';
   if (G.diag) { finishDiag(r); G.i = G.q.length; refresh(); tgSync(true); return; }
   const h = document.createElement('h2');
-  h.textContent = G.hearts <= 0 ? 'Жизни закончились 💔' : 'Раунд пройден! 🎉';
+  h.textContent = G.hearts <= 0 ? 'Раунд закончен: ошибок слишком много, это нормально, попробуйте ещё раз' : 'Раунд пройден';
   const lines = [
     `+${G.xp} XP${up ? ` · новый уровень ${lvl}` : ''}`,
     `Верно: ${G.right} · Ошибок: ${G.wrong}`,
