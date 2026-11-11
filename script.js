@@ -26,6 +26,8 @@ S.builtinSeen = S.builtinSeen || [];
 if (S.settings.newPerDay == null) S.settings.newPerDay = 15;
 const CFG = window.MR_CONFIG || {};
 S.tg = S.tg || { id: '', linked: false, bot: '', botAt: 0, hour: 19 };
+S.modes = S.modes || {}; // как пользователь понял лекцию: full — не понял, mid — наполовину, rep — только повторять
+const LESSONS = window.LESSONS || {};
 const save = () => localStorage.setItem(KEY, JSON.stringify(S));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const dayKey = (d = new Date()) => d.toLocaleDateString('sv');
@@ -213,10 +215,10 @@ function weakLectures() {
 }
 function weakestTitle() { const w = weakLectures()[0]; return w && w.st.sure < 0.7 ? w.l.title : ''; }
 /* тренировка темы: сначала то, что пора повторить и новое, иначе практика */
-function trainScope(sc) {
-  if (dueCards(sc).length) startGame(false, sc);
-  else if (extraNewCards(sc).length) startGame(false, sc, true);
-  else startGame(true, sc);
+function trainScope(sc, size = FULL) {
+  if (dueCards(sc).length) startGame(false, sc, false, false, size);
+  else if (extraNewCards(sc).length) startGame(false, sc, true, false, size);
+  else startGame(true, sc, false, false, size);
 }
 function renderWeakHome() {
   const box = $('#weakHome'); box.innerHTML = '';
@@ -238,7 +240,7 @@ function renderWeakHome() {
     const b = document.createElement('b'); b.textContent = x.l.title;
     const sp = document.createElement('span'); sp.textContent = `уверенных ответов ${Math.round(x.st.sure * 100)}% (из ${x.st.answers})`;
     t.append(b, sp);
-    const go = document.createElement('button'); go.textContent = '🎯 Подтянуть'; go.onclick = () => trainScope(x.sc);
+    const go = document.createElement('button'); go.textContent = '🎯 Подтянуть'; go.onclick = () => openSheet(x.sc);
     r.append(t, go); box.append(r);
   });
   btn('linkbtn', S.diag ? `Пройти диагностику заново (последняя: ${new Date(S.diag.day + 'T12:00').toLocaleDateString('ru', { day: 'numeric', month: 'long' })})` : 'Проверить все лекции: диагностика ~5 минут', startDiag);
@@ -295,7 +297,68 @@ function refreshSheet() {
   $('#shRepeat').textContent = due ? `▶ Повторить (${due})` : more ? `➕ Выучить ещё ${Math.min(10, more)} новых` : 'Всё повторено ✓';
   $('#shPractice').textContent = `Практика (${Math.min(10, all.length)} карточек)`;
   $('#shPractice').disabled = !all.length;
+  const hasLesson = sc.t === 'lec' && !!LESSONS[sc.id];
+  $('#shModes').hidden = !hasLesson;
+  if (hasLesson) $$('#shModes .mode').forEach((b) => b.classList.toggle('on', S.modes[sc.id] === b.dataset.mode));
 }
+$$('#shModes .mode').forEach((b) => b.addEventListener('click', () => {
+  const sc = sheetScope, mode = b.dataset.mode;
+  S.modes[sc.id] = mode; save(); closeSheet();
+  if (mode === 'rep') trainScope(sc, QUICK); else openLesson(sc.id, mode);
+}));
+
+/* ---------- объяснение темы ---------- */
+let L = null; // { id, depth, i, from }
+function openLesson(id, depth, from) {
+  if (!LESSONS[id]) return;
+  L = { id, depth: depth === 'mid' ? 'mid' : 'full', i: 0, from: from || '' };
+  $('#lesson').hidden = false; renderLesson();
+}
+function closeLesson() { L = null; $('#lesson').hidden = true; refresh(); }
+function renderLesson() {
+  const ideas = LESSONS[L.id], it = ideas[L.i], full = L.depth === 'full', box = $('#lsBody');
+  $('#lsBar').style.width = ((L.i + 1) / ideas.length * 100) + '%';
+  $('#lsCount').textContent = `${L.i + 1} из ${ideas.length}`;
+  $('#lsLecture').textContent = lectureName(L.id);
+  $$('#lesson .seg button').forEach((b) => b.classList.toggle('on', b.dataset.depth === L.depth));
+  box.innerHTML = '';
+  const add = (cls, label, text) => {
+    const d = document.createElement('div'); d.className = 'lsblock ' + cls;
+    if (label) { const l = document.createElement('div'); l.className = 'lslabel'; l.textContent = label; d.append(l); }
+    const t = document.createElement('div'); t.textContent = text; d.append(t); box.append(d); return d;
+  };
+  const h = document.createElement('h2'); h.textContent = it.t; box.append(h);
+  if (full && it.a) add('analogy', '👋 На пальцах', it.a);
+  if (it.fig && window.LESSON_FIGS[it.fig]) { const f = document.createElement('div'); f.className = 'lsfig'; f.innerHTML = window.LESSON_FIGS[it.fig](); box.append(f); }
+  add('core', '🎯 Суть', it.s);
+  if (it.m) add('', '', it.m);
+  if (it.ex) {
+    const e = add('example', '✏️ Пример', it.ex.q);
+    if (full && it.ex.steps) {
+      const ol = document.createElement('ol');
+      it.ex.steps.forEach((st) => { const li = document.createElement('li'); li.textContent = st; ol.append(li); });
+      e.append(ol);
+    }
+    const a = document.createElement('div'); a.className = 'lsans'; a.textContent = 'Ответ: ' + it.ex.a; e.append(a);
+  }
+  if (full && it.w) add('warn', '⚠️ Частая ошибка', it.w);
+  renderMath(box);
+  const last = L.i === ideas.length - 1;
+  $('#lsPrev').disabled = L.i === 0;
+  $('#lsNext').textContent = !last ? 'Дальше →' : L.from === 'game' ? 'Вернуться к карточке' : '✅ Закрепить: 5 карточек';
+  $('#lesson').scrollTop = 0;
+}
+$('#lsPrev').onclick = () => { if (L.i > 0) { L.i--; renderLesson(); } };
+$('#lsNext').onclick = () => {
+  if (L.i < LESSONS[L.id].length - 1) { L.i++; renderLesson(); return; }
+  const id = L.id, from = L.from; closeLesson();
+  if (from !== 'game') trainScope({ t: 'lec', id }, QUICK);
+};
+$('#lsClose').onclick = closeLesson;
+$$('#lesson .seg button').forEach((b) => b.addEventListener('click', () => {
+  L.depth = b.dataset.depth; if (L.from !== 'game') { S.modes[L.id] = L.depth; save(); } renderLesson();
+}));
+$('#gExplain').onclick = () => { const c = G.q[G.i]; openLesson(c.lecture, S.modes[c.lecture] === 'mid' ? 'mid' : 'full', 'game'); };
 $('#shClose').onclick = closeSheet;
 $('#sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') closeSheet(); });
 $('#shRepeat').onclick = () => { const sc = sheetScope; closeSheet(); startGame(false, sc, !dueCards(sc).length); };
@@ -416,12 +479,13 @@ function nextCard() {
   $('#gLecture').textContent = (G.diag ? 'Диагностика · ' : G.weak ? 'Слабые места · ' : G.practice ? 'Практика · ' : 'Повторение · ') + lectureName(c.lecture);
   setText($('#gQ'), c.q);
   setText($('#gA'), c.a);
-  $('#gA').hidden = true; $('#gShow').hidden = false; $('#gGrades').hidden = true;
+  $('#gA').hidden = true; $('#gShow').hidden = false; $('#gGrades').hidden = true; $('#gExplain').hidden = true;
   $('.flash').classList.remove('pop'); void $('.flash').offsetWidth; $('.flash').classList.add('pop');
 }
 $('#gShow').onclick = () => {
   const c = G.q[G.i];
   $('#gA').hidden = false; $('#gShow').hidden = true; $('#gGrades').hidden = false;
+  $('#gExplain').hidden = !LESSONS[c.lecture];
   $$('#gGrades button').forEach((b) => { b.querySelector('small').textContent = G.practice ? '' : previewLabel(c, +b.dataset.g); });
 };
 $$('#gGrades button').forEach((b) => b.addEventListener('click', () => {
@@ -470,7 +534,7 @@ function finishDiag(r) {
   r.append(h, note, list, xp);
   if (w) {
     const go = document.createElement('button'); go.className = 'primary'; go.textContent = `🎯 Подтянуть: ${lecLabel(w.l.title)}`;
-    go.onclick = () => { closeGame(); trainScope({ t: 'lec', id: w.l.id }); };
+    go.onclick = () => { closeGame(); openSheet({ t: 'lec', id: w.l.id }); };
     r.append(go);
   }
   const home = document.createElement('button'); home.className = 'ghost'; home.textContent = 'На главную'; home.onclick = closeGame;
@@ -480,7 +544,7 @@ function finish() {
   S.stats.xp += G.xp;
   const lvl = level(S.stats.xp), up = lvl > G.lvl;
   save();
-  $('.flash').hidden = true; $('#gShow').hidden = true; $('#gGrades').hidden = true; $('.gmeta').hidden = true;
+  $('.flash').hidden = true; $('#gShow').hidden = true; $('#gGrades').hidden = true; $('.gmeta').hidden = true; $('#gExplain').hidden = true;
   const r = $('#gResult'); r.hidden = false; r.innerHTML = '';
   if (G.diag) { finishDiag(r); G.i = G.q.length; refresh(); tgSync(true); return; }
   const h = document.createElement('h2');
@@ -534,7 +598,7 @@ $('#importFile').onchange = (e) => {
       const d = JSON.parse(t);
       if (!Array.isArray(d.cards) || !Array.isArray(d.lectures)) throw 0;
       if (!confirm('Заменить текущие данные загруженной копией?')) return;
-      S = d; S.stats.newLog = S.stats.newLog || {}; S.builtinSeen = S.builtinSeen || []; mergeBuiltin(); refresh(); alert('Готово');
+      S = d; S.stats.newLog = S.stats.newLog || {}; S.builtinSeen = S.builtinSeen || []; S.modes = S.modes || {}; S.tg = S.tg || { id: '', linked: false, bot: '', botAt: 0, hour: 19 }; mergeBuiltin(); refresh(); alert('Готово');
     } catch (err) { alert('Это не похоже на копию данных'); }
   });
 };
