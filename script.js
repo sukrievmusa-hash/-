@@ -235,7 +235,7 @@ function renderWeakHome() {
   const btn = (cls, t, fn) => { const b = document.createElement('button'); b.className = cls; b.textContent = t; b.onclick = fn; box.append(b); return b; };
   if (!rows.length) {
     text('Короткий тест покажет, какие темы проседают.');
-    btn('ghost', 'Найти слабые места · 5–7 минут', startDiag);
+    btn('ghost', 'Найти слабые места · около 10 минут', startDiag);
     return;
   }
   if (!weak.length) {
