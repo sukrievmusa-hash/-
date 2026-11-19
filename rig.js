@@ -3,7 +3,7 @@
    руки и ноги ставятся через IK: голем держит быка за рога, ноги упираются в пол.
    Координаты «виртуальные»: ширина сцены 430, пол на y = 0, вверх — минус. */
 window.Rig = (() => {
-  let cx = null, TINT = 0, TC = [255, 255, 255], FLIP = false, OUTER = false, MIR = false, PLANTS = [];
+  let cx = null, BT = 0, BTC = [0, 0, 0], TINT = 0, TC = [255, 255, 255], FLIP = false, OUTER = false, MIR = false, PLANTS = [];
   const LASTU = {};
   const OUT = '#0b0e16', LW = 3;
   const VW = 430;
@@ -14,6 +14,7 @@ window.Rig = (() => {
   const C = (h, s = 0) => {
     let r = hex(h);
     if (s > 0) r = mixc(r, [255, 255, 255], s); else if (s < 0) r = mixc(r, [6, 8, 16], -s);
+    if (BT > 0) r = mixc(r, BTC, BT);
     if (TINT > 0) r = mixc(r, TC, TINT);
     return `rgb(${r[0] | 0},${r[1] | 0},${r[2] | 0})`;
   };
@@ -471,7 +472,24 @@ window.Rig = (() => {
     sx: 0, D: () => 0, w: 190,
     draw(P) { return null; }
   };
-  const BOSS = { golem, dragon, scorpion, serpent, rival };
+  /* «Сессия»: огромный голем в тёмно-багровой броне с золотым ореолом — финальный босс по всем разделам */
+  const SS = 1.3;
+  const session = {
+    sx: 52, D: (p) => 84 + 14 * p, w: 92,
+    draw(P, g) {
+      const bx = P.bx, inv = (w) => [bx + (w[0] - bx) / SS, w[1] / SS];
+      const t = P.t;
+      glow(bx - 40, -170, 190, '#ff2a2a', .35 + .12 * Math.sin(t * 2.2) + (P.raged ? .15 : 0));
+      cx.save(); cx.translate(bx, 0); cx.scale(SS, SS); cx.translate(-bx, 0);
+      BT = .42; BTC = [165, 8, 28];
+      const an = golem.draw(P, { gN: inv(g.gN), gF: inv(g.gF) });
+      BT = 0;
+      cx.restore();
+      const sc = (w) => [bx + (w[0] - bx) * SS, w[1] * SS];
+      return { body: sc(an.body), head: sc(an.head), mouth: sc(an.mouth) };
+    }
+  };
+  const BOSS = { golem, dragon, scorpion, serpent, rival, session };
 
   /* P: { t, p, kickM, kickB, flashM, flashB, koM, koB, scars, shield, blockT, charge, turbo, raged, stun, hpFrac, introM, introB,
           key (правый боец: golem/dragon/scorpion/serpent/rival=бык), lkey (левый: 'bull' или босс), col, rcol, rscars } */

@@ -78,7 +78,8 @@
   const every = (ms, f) => { const t = setInterval(f, ms); timers.push(t); return t; };
   const clearTimers = () => { timers.forEach(clearInterval); timers = []; };
   const send = (o) => net && net.send(Object.assign({ id: myId }, o));
-  const secs = () => Object.keys(window.BUILTIN_SECTIONS || {}).map(Number);
+  const secs = () => Object.keys(window.BUILTIN_SECTIONS || {}).map(Number).concat([99]);
+  const secTitle = (k) => k === 99 ? 'Сессия 1. Математика (все разделы)' : `Раздел ${k}. ${SEC_NAMES[k]}`;
 
   function connect(code, host) {
     leaveNet(); room = code; isHost = host; list = []; peers = {}; teamOf = {}; hostSeen = host ? Date.now() : 0; note = '';
@@ -121,11 +122,11 @@
     const meE = l.find((x) => x.id === myId); if (!meE) return;
     const mates = l.filter((x) => x.team === meE.team && x.id !== myId), foes = l.filter((x) => x.team !== meE.team);
     if (!foes.length) return;
-    sec = s; const sc = { t: 'sec', id: s };
+    sec = s; const sc = s === 99 ? { t: 'all' } : { t: 'sec', id: s };
     let pool = [...dueCards(sc), ...extraNewCards(sc)];
     if (pool.length < 25) pool = pool.concat(practiceCards(sc));
     const seen = new Set(); pool = pool.filter((c) => !seen.has(c.id) && seen.add(c.id));
-    if (!pool.length) pool = S.cards.filter((c) => sectionOf(c) === s);
+    if (!pool.length) pool = S.cards.filter((c) => s === 99 || sectionOf(c) === s);
     if (!pool.length) { note = 'В этом разделе нет карточек'; return; }
     let q = shuffle(pool).slice(0, 60); while (q.length < 40) q = q.concat(shuffle(pool));
     const fac = 2 / (mates.length + 2);
@@ -220,7 +221,7 @@
     c.innerHTML = '';
     if (!room) {
       c.append(el('h3', '', 'Бой'));
-      const sel = el('select'); secs().forEach((k) => { const o = el('option', '', `Раздел ${k}. ${SEC_NAMES[k]}`); o.value = k; if (k === sec) o.selected = true; sel.append(o); });
+      const sel = el('select'); secs().forEach((k) => { const o = el('option', '', secTitle(k)); o.value = k; if (k === sec) o.selected = true; sel.append(o); });
       sel.onchange = () => { sec = +sel.value; };
       const mk = el('button', 'primary', 'Создать бой и позвать друга');
       mk.onclick = () => { sec = +sel.value; connect(rc(), true); renderRoom(); };
@@ -253,14 +254,14 @@
     c.append(row);
     const ok = teams[0].length && teams[1].length;
     if (isHost) {
-      const sel = el('select'); secs().forEach((k) => { const o = el('option', '', `Раздел ${k}. ${SEC_NAMES[k]}`); o.value = k; if (k === sec) o.selected = true; sel.append(o); });
+      const sel = el('select'); secs().forEach((k) => { const o = el('option', '', secTitle(k)); o.value = k; if (k === sec) o.selected = true; sel.append(o); });
       sel.onchange = () => { sec = +sel.value; rebuild(true); };
       const go = el('button', 'primary', ok ? 'НАЧАТЬ БОЙ' : 'Ждём соперника…'); go.disabled = !ok;
       go.onclick = () => { const l = list.slice(); [0, 250, 600].forEach((d) => setTimeout(() => send({ t: 'start', list: l, sec }), d)); beginMatch(l, sec); };
       c.append(el('label', 'muted small', 'Тема боя'), sel, go);
       if (list.length < 2) c.append(el('div', 'muted small', 'Отправь ссылку другу: как только он зайдёт, он появится здесь.'));
     } else {
-      c.append(el('div', 'dl-note', hostSeen && Date.now() - hostSeen < 6000 ? `Тема: раздел ${sec}. Ждём, пока хозяин начнёт бой` : netState === 'ready' && Date.now() - (hostSeen || 0) > 7000 ? 'Хозяин комнаты не отвечает. Проверь ссылку: он должен держать страницу открытой.' : 'Ищу комнату…'));
+      c.append(el('div', 'dl-note', hostSeen && Date.now() - hostSeen < 6000 ? `Тема: ${secTitle(sec)}. Ждём, пока хозяин начнёт бой` : netState === 'ready' && Date.now() - (hostSeen || 0) > 7000 ? 'Хозяин комнаты не отвечает. Проверь ссылку: он должен держать страницу открытой.' : 'Ищу комнату…'));
     }
     const lv = el('button', 'ghost', 'Выйти из комнаты'); lv.onclick = leave; c.append(lv);
     if (note) c.append(el('div', 'dl-note', note));

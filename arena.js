@@ -16,6 +16,9 @@
     3: { key: 'dragon', name: 'Дракон Пределов', color: '#ff5a2a', glow: 'rgba(255,80,40,.6)', front: 0.07, rate: 0.027, w: 0.42,
       start: 'Предел твоих знаний уже близок!', rage: 'Ты стремишься ко мне, но не достигнешь!',
       win: 'Предела нет. Как и твоей победы.', die: 'Производная… обнулилась…' },
+    99: { key: 'session', name: 'Сессия 1. Математика', color: '#ff3a4a', glow: 'rgba(255,60,80,.6)', front: 0.06, rate: 0.032, w: 0.46, cards: 16,
+      start: 'Экзамен начинается. Все разделы, без шпаргалок.', rage: 'Это ещё не пересдача!',
+      win: 'Встретимся на пересдаче.', die: 'Зачёт… поставлен…' },
     4: { key: 'serpent', name: 'Змей Бесконечности', color: '#b46bff', glow: 'rgba(170,90,255,.6)', front: 0.05, rate: 0.03, w: 0.42,
       start: 'Я бесконечен. А твоё терпение?', rage: 'Частные производные меня не остановят!',
       win: 'Бесконечность всегда побеждает.', die: 'Экстремум… найден…' }
@@ -717,27 +720,42 @@
   }
 
   /* ---------- выбор босса ---------- */
-  const secs = () => Object.keys(window.BUILTIN_SECTIONS || {}).map(Number).filter((k) => BOSSES[k]);
+  const SESSION = 99;
+  const secs = () => Object.keys(window.BUILTIN_SECTIONS || {}).map(Number).filter((k) => BOSSES[k]).concat(S.cards.length ? [SESSION] : []);
+  const scopeOf = (sec) => sec === SESSION ? ALL : { t: 'sec', id: sec };
+  const secLabel = (sec) => sec === SESSION ? 'Все разделы: большой бой перед сессией' : `Раздел ${sec}. ${SEC_NAMES[sec]}`;
   function bossInfo(sec) {
-    const sc = { t: 'sec', id: sec }, due = dueCards(sc).length, fresh = extraNewCards(sc).length, st = scopeStats(sc);
+    const sc = scopeOf(sec), due = dueCards(sc).length, fresh = extraNewCards(sc).length, st = scopeStats(sc);
     return { sec, B: bossOf(sec), due, fresh, st, beaten: A.beat[sec] === today(), mode: due ? 'rev' : fresh ? 'new' : 'prac' };
   }
-  function nextBoss(except) { return secs().map(bossInfo).filter((x) => x.sec !== except && x.due).sort((a, b) => b.due - a.due).map((x) => x.sec)[0] || 0; }
+  function nextBoss(except) { return secs().filter((k) => k !== SESSION).map(bossInfo).filter((x) => x.sec !== except && x.due).sort((a, b) => b.due - a.due).map((x) => x.sec)[0] || 0; }
   function bossOfDay() {
-    const all = secs().map(bossInfo);
+    const all = secs().filter((k) => k !== SESSION).map(bossInfo);
     return all.filter((x) => x.due && !x.beaten).sort((a, b) => b.due - a.due || a.st.sure - b.st.sure)[0]
       || all.filter((x) => x.fresh && !x.beaten)[0] || all.filter((x) => !x.beaten)[0] || all[0];
   }
-  const statusText = (x) => x.mode === 'rev' ? `${Math.min(FIGHT, x.due)} карточек к бою` : x.mode === 'new' ? 'новые карточки' : 'тренировочный бой';
+  const sizeOf = (sec) => (BOSSES[sec] && BOSSES[sec].cards) || FIGHT;
+  const statusText = (x) => x.mode === 'rev' ? `${Math.min(sizeOf(x.sec), x.due)} карточек к бою` : x.mode === 'new' ? 'новые карточки' : 'тренировочный бой';
+  /* сессия: карточки из всех лекций вперемешку — сначала просроченные, потом новые, иначе тренировка */
+  function sessionQueue(n) {
+    const now = Date.now();
+    const mix = (arr) => { const g = {}; arr.forEach((c) => (g[c.lecture] = g[c.lecture] || []).push(c)); const L = shuffle(Object.values(g)), out = []; for (let i = 0; out.length < arr.length; i++) L.forEach((l) => { if (l[i]) out.push(l[i]); }); return out; };
+    const rev = mix(S.cards.filter((c) => c.seen && c.due <= now).sort((a, b) => a.due - b.due));
+    const fresh = mix(S.cards.filter((c) => !c.seen));
+    if (rev.length || fresh.length) return [rev.concat(fresh).slice(0, n), rev.length ? 'rev' : 'new'];
+    return [mix(shuffle(S.cards)).slice(0, n), 'prac'];
+  }
   function fight(sec) {
-    const sc = { t: 'sec', id: sec };
+    const sc = scopeOf(sec);
     let q = dueCards(sc), mode = 'rev';
     if (!q.length) { q = extraNewCards(sc); mode = 'new'; }
     if (!q.length) { q = practiceCards(sc); mode = 'prac'; }
-    q = q.slice(0, FIGHT);
+    const n = sizeOf(sec);
+    if (sec === SESSION) [q, mode] = sessionQueue(n);
+    q = q.slice(0, n);
     if (!q.length) return;
     hideHub();
-    launch(q, { practice: mode === 'prac', extra: mode === 'new', scope: sc, size: FIGHT, arena: { sec } });
+    launch(q, { practice: mode === 'prac', extra: mode === 'new', scope: sc, size: n, arena: { sec } });
   }
 
   const hubEl = el('div', 'overlay ahub'); hubEl.id = 'arenaHub'; hubEl.hidden = true;
@@ -753,7 +771,7 @@
     secs().map(bossInfo).forEach((x) => {
       const b = el('button', 'bcard ' + x.B.key + (x.beaten ? ' beaten' : '')); b.style.setProperty('--glow', x.B.glow);
       const im = el('img'); im.src = `arena/${x.B.key}.webp`; im.alt = '';
-      b.append(im, el('b', '', x.B.name), el('span', 'bs', `Раздел ${x.sec}. ${SEC_NAMES[x.sec]}`), el('span', 'bst' + (x.mode === 'rev' ? ' due' : ''), x.beaten ? 'Повержен сегодня ✓' : statusText(x)));
+      b.append(im, el('b', '', x.B.name), el('span', 'bs', secLabel(x.sec)), el('span', 'bst' + (x.mode === 'rev' ? ' due' : ''), x.beaten ? 'Повержен сегодня ✓' : statusText(x)));
       if (A.wins[x.sec]) b.append(el('span', 'bw', `побед: ${A.wins[x.sec]}`));
       b.onclick = () => fight(x.sec);
       grid.append(b);
@@ -778,7 +796,7 @@
     home.innerHTML = '';
     const im = el('img', 'hboss'); im.src = `arena/${x.B.key}.webp`; im.alt = '';
     const t = el('div', 'ht');
-    t.append(el('div', 'hk', x.beaten ? 'Все боссы на сегодня повержены' : 'БОСС ДНЯ'), el('b', '', x.B.name), el('span', '', `${SEC_NAMES[x.sec]} · ${statusText(x)}`));
+    t.append(el('div', 'hk', x.beaten ? 'Все боссы на сегодня повержены' : 'БОСС ДНЯ'), el('b', '', x.B.name), el('span', '', `${x.sec === SESSION ? 'Все разделы' : SEC_NAMES[x.sec]} · ${statusText(x)}`));
     const go = el('button', 'primary fightbtn', x.beaten ? 'Ещё бой' : 'В бой');
     go.onclick = () => fight(x.sec);
     const all = el('button', 'linkbtn', 'Все боссы →'); all.onclick = openHub;
