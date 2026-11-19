@@ -47,14 +47,15 @@
       if (closed) return;
       const url = brokers[ui % brokers.length]; let done = false, to = 0; buf = new Uint8Array(0);
       onState('connecting');
-      const retry = (ms) => { clearTimeout(to); clearInterval(ping); ready = false; try { ws.close(); } catch (e) { /* уже закрыт */ } if (!closed) setTimeout(open, ms); };
-      try { ws = new WebSocket(url, 'mqtt'); } catch (e) { ui++; return setTimeout(open, 500); }
-      const me = ws; ws.binaryType = 'arraybuffer';
+      const retry = (ms) => { clearTimeout(to); clearInterval(ping); ready = false; try { me.close(); } catch (e) { /* уже закрыт */ } if (!closed) setTimeout(open, ms); };
+      let me; try { me = ws = new WebSocket(url, 'mqtt'); } catch (e) { ui++; return setTimeout(open, 500); }
+      const tx = (b) => { if (me.readyState === 1) me.send(b); };
+      me.binaryType = 'arraybuffer';
       to = setTimeout(() => { if (!ready && ws === me) { ui++; retry(200); } }, 5000);
-      ws.onopen = () => ws.send(pkt(0x10, [0, 4, 77, 81, 84, 84, 4, 2, 0, 40, ...str(cid)]));
-      ws.onerror = () => { if (ws === me && !ready) { ui++; retry(300); } };
-      ws.onclose = () => { if (ws !== me || closed) return; if (ready) { clearInterval(ping); ready = false; onState('connecting'); setTimeout(open, 800); } else if (!done) { ui++; retry(300); } };
-      ws.onmessage = (e) => {
+      me.onopen = () => tx(pkt(0x10, [0, 4, 77, 81, 84, 84, 4, 2, 0, 40, ...str(cid)]));
+      me.onerror = () => { if (ws === me && !ready) { ui++; retry(300); } };
+      me.onclose = () => { if (ws !== me || closed) return; if (ready) { clearInterval(ping); ready = false; onState('connecting'); setTimeout(open, 800); } else if (!done) { ui++; retry(300); } };
+      me.onmessage = (e) => {
         const u = new Uint8Array(e.data), nb = new Uint8Array(buf.length + u.length); nb.set(buf); nb.set(u, buf.length); buf = nb;
         for (;;) {
           if (buf.length < 2) return;
@@ -62,8 +63,8 @@
           do { if (i >= buf.length) return; b = buf[i++]; len += (b & 127) * mul; mul *= 128; } while (b & 128);
           if (buf.length < i + len) return;
           const t = buf[0] >> 4, fl = buf[0] & 15, body = buf.slice(i, i + len); buf = buf.slice(i + len);
-          if (t === 2) { if (body[1] === 0) ws.send(pkt(0x82, [0, 1, ...str(topic), 0])); else { ui++; retry(500); return; } }
-          else if (t === 9) { ready = true; done = true; clearTimeout(to); onState('ready'); clearInterval(ping); ping = setInterval(() => { try { ws.send(Uint8Array.of(0xC0, 0)); } catch (x) { /* связь оборвалась */ } }, 20000); }
+          if (t === 2) { if (body[1] === 0) tx(pkt(0x82, [0, 1, ...str(topic), 0])); else { ui++; retry(500); return; } }
+          else if (t === 9) { ready = true; done = true; clearTimeout(to); onState('ready'); clearInterval(ping); ping = setInterval(() => { try { tx(Uint8Array.of(0xC0, 0)); } catch (x) { /* связь оборвалась */ } }, 20000); }
           else if (t === 3) {
             const tl = (body[0] << 8) | body[1]; let k = 2 + tl; if ((fl >> 1) & 3) k += 2;
             try { onMsg(JSON.parse(dec.decode(body.slice(k)))); } catch (x) { /* чужой мусор в канале */ }
@@ -73,7 +74,7 @@
     }
     open();
     return {
-      send(o) { if (!ready) return false; try { ws.send(pkt(0x30, [...str(topic), ...enc.encode(JSON.stringify(o))])); return true; } catch (e) { return false; } },
+      send(o) { if (!ready || !ws || ws.readyState !== 1) return false; try { ws.send(pkt(0x30, [...str(topic), ...enc.encode(JSON.stringify(o))])); return true; } catch (e) { return false; } },
       close() { closed = true; clearInterval(ping); try { ws.close(); } catch (e) { /* уже закрыт */ } },
       get ready() { return ready; }
     };
