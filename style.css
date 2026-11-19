@@ -507,3 +507,18 @@ button.primary,button.ghost,button.danger,.filebtn{border-radius:8px}
 .dlobby input::placeholder{color:#8e99b8}
 .dlobby select option{color:#111}
 .dl-link code{color:#c9d3ec}
+
+.crowd.hype{animation:chype .45s}
+@keyframes chype{0%{filter:brightness(1)}25%{filter:brightness(2.1) saturate(1.5);transform:translateY(-3px)}100%{filter:brightness(1);transform:none}}
+.dchip{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:2px 9px 2px 3px;border-radius:99px;background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 2px var(--c);margin-right:4px;vertical-align:middle}
+.aside.bs .dchip{margin:0 0 0 4px}
+.dchip i{font-style:normal;font-size:17px;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;background:rgba(0,0,0,.35)}
+.dchip b{font-size:12px;letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.duelmode .aname{overflow:visible;white-space:normal}
+.duelmode .tug{height:12px}
+
+.dl-fig{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.dl-fig button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border-radius:12px;border:2px solid transparent;background:rgba(255,255,255,.06);color:#e8ecf8;font-size:11px;font-weight:700}
+.dl-fig button img{width:100%;max-width:54px;height:40px;object-fit:contain}
+.dl-fig button.on{border-color:#ffd24a;background:rgba(255,210,74,.14)}
+.dl-pl .fi{width:34px;height:26px;object-fit:contain}

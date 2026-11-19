@@ -20,7 +20,11 @@
       start: 'Я бесконечен. А твоё терпение?', rage: 'Частные производные меня не остановят!',
       win: 'Бесконечность всегда побеждает.', die: 'Экстремум… найден…' }
   };
-  const duelBoss = (D) => ({ key: 'rival', name: D.foes[0].name, color: D.rcol, glow: 'rgba(255,200,80,.5)', front: 0.05, rate: 0, w: 0.4, start: '', rage: '', win: '', die: '' });
+  const FIGHTERS = { golem: 1, scorpion: 2, dragon: 3, serpent: 4 };
+  const duelBoss = (D) => {
+    const fk = D.foes[0].fk, bb = FIGHTERS[fk] ? BOSSES[FIGHTERS[fk]] : null;
+    return Object.assign({ key: 'rival', color: D.rcol, glow: 'rgba(255,200,80,.5)', front: 0.05, w: 0.4 }, bb || {}, { name: D.foes[0].name, rate: 0, start: '', rage: '', win: '', die: '', key: bb ? bb.key : 'rival' });
+  };
   const MODS = {
     claw: { name: 'Гидро-руки', what: 'Убирают два неверных варианта ответа' },
     shield: { name: 'Энерго-щит', what: 'Один раз держит удар: ошибку или стену' },
@@ -162,6 +166,7 @@
       const k = p.life / p.max;
       cx.globalAlpha = Math.max(0, Math.min(1, k * 1.6));
       if (p.kind === 'smoke') { cx.globalAlpha = Math.max(0, k * 0.8); cx.fillStyle = p.c; cx.beginPath(); cx.arc(p.x, p.y, p.s * (3 - 2 * k) * 3, 0, 7); cx.fill(); }
+      else if (p.kind === 'ring') { cx.strokeStyle = p.c; cx.lineWidth = Math.max(.6, p.s * k); cx.beginPath(); cx.ellipse(p.x, p.y, p.rad * (1 - k) + 4, (p.rad * (1 - k) + 4) * .45, 0, 0, 7); cx.stroke(); }
       else if (p.kind === 'gear') drawGear(p);
       else if (p.kind === 'bolt') { cx.save(); cx.translate(p.x, p.y); cx.rotate(p.r); cx.fillStyle = p.c; cx.fillRect(-p.s * 1.5, -p.s / 2, p.s * 3, p.s); cx.fillRect(-p.s * 1.5, -p.s, p.s, p.s * 2); cx.restore(); }
       else if (p.kind === 'star') { cx.fillStyle = p.c; cx.font = (p.s * 5) + 'px sans-serif'; cx.fillText('✦', p.x, p.y); }
@@ -217,6 +222,19 @@
   const bossX = () => (F.anc ? VX(F.anc.boss[0]) : SW * .7) - SW * F.B.w * .5;  // левый край босса
   function place() { $('#aKnob').style.left = (50 + clamp(F.p, -1, 1) * 50) + '%'; }
   const easeBack = (x) => { const c = 1.6; x = clamp(x, 0, 1) - 1; return 1 + (c + 1) * x * x * x + c * x * x; };
+  /* лапа ударила в пол: пыль, искры, лёгкий толчок камеры */
+  function emitPlants(an) {
+    if (!an || !an.plants || !F) return;
+    an.plants.forEach((pl) => {
+      const x = VX(pl.x), y = FLR + 2;
+      if (Math.random() < .6) burst(x, y, { n: 1, kind: 'smoke', colors: ['rgba(200,190,170,.4)', 'rgba(150,150,160,.35)'], speed: 1.2, life: 22, grav: -0.015, size: 1.3, dir: -Math.PI / 2, spread: 2.8 });
+      burst(x, y, { n: 3 + Math.round(pl.e * 3), speed: 3 + pl.e * 2.5, life: 13, size: 1.8, grav: .22, dir: -Math.PI / 2, spread: 1.9 });
+    });
+  }
+  /* рывок камеры и стоп-кадр на сильных ударах */
+  function punch(k) { [chars, cv].forEach((c) => { c.style.transformOrigin = '50% 88%'; c.style.transition = 'none'; c.style.transform = 'scale(' + k + ')'; void c.offsetWidth; c.style.transition = 'transform .3s cubic-bezier(.2,.9,.3,1)'; c.style.transform = 'scale(1)'; }); }
+  const ring = (x, y, c, max, life) => parts.push({ x, y, vx: 0, vy: 0, life: life || 20, max: life || 20, c, s: 4, g: 0, kind: 'ring', rad: max, r: 0, vr: 0 });
+  const hype = () => { const c = $('.crowd'); if (c) { c.classList.remove('hype'); void c.offsetWidth; c.classList.add('hype'); } };
   function drawChars(dt) {
     const dec = (k, r) => { F[k] = (F[k] || 0) * Math.exp(-dt * r); };
     dec('kickM', 6); dec('kickB', 6); dec('flashM', 7); dec('flashB', 8); dec('blockT', 3); dec('charge', 3); dec('stunT', 1.4);
@@ -229,12 +247,12 @@
     const base = {
       key: F.B.key, t: performance.now() / 1000, p: clamp(F.p, -1.05, 1.05),
       kickM: F.kickM, kickB: F.kickB, flashM: F.flashM, flashB: F.flashB, koM: 0, koB: 0,
-      col: F.duel ? F.duel.me.col : undefined, rcol: F.duel ? F.duel.rcol : undefined,
+      col: F.duel ? F.duel.me.col : undefined, lkey: F.duel ? (F.duel.me.fk || 'bull') : 'bull', rcol: F.duel ? F.duel.rcol : undefined,
       rscars: F.duel ? (F.p > .6 ? 2 : F.p > .35 ? 1 : 0) : 0,
       scars: F.duel ? (F.p < -.6 ? 2 : F.p < -.35 ? 1 : 0) : F.scars, shield: F.shield ? 1 : 0, blockT: F.blockT, charge: F.charge, turbo: F.boost > 0, raged: F.raged,
       stun: F.stunT, hpFrac: F.hpLeft / F.hpMax, introM: -(1 - e) * 280, introB: (1 - e) * 280
     };
-    if (!F.fin) { F.anc = Rig.draw(chx, base); return; }
+    if (!F.fin) { F.anc = Rig.draw(chx, base); emitPlants(F.anc); return; }
     finaleFrame(base, d);
   }
   /* ---------- финал: победитель давит проигравшего и разламывает на части ---------- */
@@ -259,6 +277,7 @@
     }
     const front = fin.pivot + (fin.c0 - fin.pivot) * fin.sx, shift = front - fin.c0;
     F.anc = Rig.draw(chx, Object.assign({}, base, { p: pUse, hide: winnerHide, introM: shift, introB: fin.loser === 'bull' ? shift : 0 }));
+    emitPlants(F.anc);
     if (!fin.broken) {
       const jx = Math.sin(el * 70) * 1.6 * fin.e, jy = Math.sin(el * 53) * 1.2 * fin.e;
       chx.save(); chx.translate(fin.pivot + jx, jy); chx.scale(fin.sx, fin.sy); chx.translate(-fin.pivot, 0);
@@ -302,7 +321,7 @@
     }
     fin.tiles = tiles;
     const bxp = VX(front), byp = VY(-110);
-    anim(stage, 'shake big', 800); anim($('#aVign'), 'white', 350); anim($('#aVign'), 'red', 700);
+    anim(stage, 'shake big', 800); anim($('#aVign'), 'white', 350); anim($('#aVign'), 'red', 700); punch(1.1); ring(bxp, byp, 'rgba(255,255,255,.95)', 230, 34); ring(bxp, byp, 'rgba(255,170,60,.8)', 160, 28);
     burst(bxp, byp, { n: 90, speed: 14, size: 4 }); burst(bxp, byp, { n: 40, colors: ['#ffffff', '#ffd24a', '#ff6a1e'], speed: 9, life: 50, size: 5 });
     burst(bxp, byp, { n: 16, kind: 'gear', colors: ['#9aa6bd', '#c3ccdc', '#6f7a90', '#d9a441', F.B.color], speed: 10, life: 95, grav: .32, size: 4, dir: -Math.PI / 2, spread: 3.4 });
     burst(bxp, byp, { n: 16, kind: 'bolt', colors: ['#cfd6e4', '#8892a6'], speed: 10, life: 70, grav: .35, size: 3, dir: -Math.PI / 2, spread: 3.4 });
@@ -341,7 +360,7 @@
     if (!F.ko && F.pt <= -1) F.duel ? duelWall(false) : wallHit();
     if (!F.ko && F.pt >= 1) F.duel ? duelWall(true) : bossWall();
     place();
-    drawChars(dt);
+    if (performance.now() >= (F.freeze || 0)) drawChars(dt);
     emit(dt, (F.p - prev) / Math.max(dt, 1e-3));
     drawParts();
     raf = requestAnimationFrame(loop);
@@ -410,8 +429,8 @@
       p: 0, pt: 0, hold: Date.now() + 2600, scars: 0, koDir: 0, kickM: 0, kickB: 0, flashM: 0, flashB: 0, blockT: 0, charge: 0, stunT: 0, fin: null, anc: null };
     game.classList.add('arena'); stageWrap.hidden = false;
     game.classList.toggle('duelmode', !!DU); modsBox.hidden = !!DU;
-    $('#aMName').textContent = DU ? [DU.me, ...DU.mates].map((x) => x.av + ' ' + x.name).join(' · ') : 'МЕХ-БЫК';
-    $('#aBName').textContent = DU ? DU.foes.map((x) => x.av + ' ' + x.name).join(' · ') : B.name.toUpperCase();
+    const chips = (box, list) => { box.textContent = ''; list.forEach((x) => { const c = el('span', 'dchip'); c.style.setProperty('--c', x.col); c.append(el('i', '', x.av), el('b', '', x.name)); box.append(c); }); };
+    if (DU) { chips($('#aMName'), [DU.me, ...DU.mates]); chips($('#aBName'), DU.foes); } else { $('#aMName').textContent = 'МЕХ-БЫК'; $('#aBName').textContent = B.name.toUpperCase(); }
     if (DU) { F.hpMax = F.hpLeft = 1; F.hold = Date.now() + 1800; }
     bossEl.className = ''; me.className = '';
     $('#aBLag').style.width = '100%'; $('#aPLag').style.width = '100%';
@@ -423,6 +442,7 @@
       if (!F) return;
       anim(stage, 'shake big', 600); anim($('#aVign'), 'white', 300);
       burst(contactX(), contactY(), { n: 70, speed: 12, size: 4 }); gears(contactX(), contactY(), 3); bolts(contactX(), contactY(), 4);
+      ring(contactX(), contactY(), 'rgba(255,235,170,.95)', 200, 30); ring(contactX(), contactY(), 'rgba(255,255,255,.7)', 120, 22); punch(1.07); hype();
       SFX.clash(); vib([50, 30, 80]);
       banner(g.practice ? 'ТРЕНИРОВКА' : 'СХВАТКА!', 'go');
       grindOn();
@@ -459,6 +479,9 @@
       anim(stage, crit ? 'shake big' : 'shake', crit ? 600 : 380);
       if (crit) { anim($('#aVign'), 'white', 300); SFX.crit(); vib([30, 20, 50]); } else { SFX.shove(); vib(30); }
       burst(x, y, { n: crit ? 60 : 36, speed: crit ? 12 : 8, size: crit ? 4 : 3 });
+      ring(x, y, crit ? 'rgba(255,230,150,.9)' : 'rgba(255,255,255,.7)', crit ? 150 : 95, crit ? 26 : 20); punch(crit ? 1.06 : 1.028);
+      burst(meX() + SW * .05, SH * .6, { n: crit ? 14 : 8, speed: 15, dir: Math.PI, spread: .18, life: 13, size: 1.5, grav: 0, colors: ['rgba(255,255,255,.75)'] });
+      if (crit) { F.freeze = performance.now() + 85; hype(); }
       gears(x + 10, y - 10, crit ? 3 : 1, -Math.PI / 2 + 0.5, [F.B.color, '#9aa6bd', '#6f7a90']);
       if (turbo) burst(meX() + SW * 0.04, SH * 0.55, { n: 30, colors: ['#ffe066', '#ff8a1e', '#ff4d1e'], speed: 6, dir: Math.PI, spread: 0.8, life: 26, grav: 0, kind: 'fire' });
     }, 140);
@@ -506,6 +529,7 @@
       anim(bossEl, 'slam', 520); anim(me, 'hurt', 600); anim(stage, crit ? 'shake big' : 'shake', crit ? 500 : 350);
       SFX.slam(); vib(crit ? [50, 30, 60] : 30);
       burst(x, y, { n: crit ? 46 : 28, colors: [F.B.color, '#ffd24a', '#fff'], speed: crit ? 10 : 7, life: 28, dir: Math.PI, spread: 2.6 });
+      ring(x, y, 'rgba(255,120,90,.85)', crit ? 140 : 90, crit ? 26 : 20); punch(crit ? 1.05 : 1.025); if (crit) { F.freeze = performance.now() + 80; hype(); }
       gears(x - 20, y, crit ? 3 : 1, -Math.PI / 2 - 0.6);
       floatText(av + (crit ? ' КРИТ!' : ''), x + 30, y - 80, crit ? 'critw' : 'hurt');
     } else { anim(bossEl, 'hit', 500); floatText(av + ' ошибся', x + 30, y - 70, 'turbo'); }

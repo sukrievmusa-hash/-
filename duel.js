@@ -11,6 +11,7 @@
 
   const AVS = ['🐂', '🦊', '🐼', '🐯', '🦁', '🐸', '🐵', '🦄', '🐲', '🤖', '👾', '🥷'];
   const COLS = [['Синий', '#2f7dff'], ['Красный', '#e5483c'], ['Зелёный', '#2fbf6a'], ['Фиолет', '#9b5cff'], ['Оранж', '#ff8a1e'], ['Золото', '#f2b705'], ['Розовый', '#ff5fa8'], ['Бирюза', '#19c6c0']];
+  const FIGH = [['bull', 'Бык'], ['golem', 'Голем'], ['scorpion', 'Скорпион'], ['dragon', 'Дракон'], ['serpent', 'Змей']];
   const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt'];
   const LIMIT = 240; // секунд на бой, потом решает положение быков
   const MAXP = 4;
@@ -19,9 +20,10 @@
   const P = A.duel = A.duel || {};
   if (!P.name) P.name = 'Игрок' + (100 + Math.floor(Math.random() * 900));
   if (!P.av) P.av = rnd(AVS);
+  if (!FIGH.some((f) => f[0] === P.fk)) P.fk = 'bull';
   if (!P.col) P.col = rnd(COLS)[1];
   const myId = Math.random().toString(36).slice(2, 8);
-  const mine = () => ({ id: myId, name: P.name.slice(0, 12), av: P.av, col: P.col });
+  const mine = () => ({ id: myId, name: P.name.slice(0, 12), av: P.av, col: P.col, fk: P.fk });
 
   /* ---------- MQTT по WebSocket ---------- */
   const enc = new TextEncoder(), dec = new TextDecoder();
@@ -188,9 +190,9 @@
     const frame = (t) => {
       if (box.hidden) { prevRaf = 0; return; }
       cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, W, H);
-      const k = 1.12; cx.setTransform(k, 0, 0, k, 12, H - 10);
+      const k = { bull: 1.0, golem: .8, dragon: .86, scorpion: 1.0, serpent: .95 }[P.fk] || 1; cx.setTransform(k, 0, 0, k, { bull: 22, golem: 36, dragon: 28, scorpion: 14, serpent: 10 }[P.fk] || 12, H - 10);
       const s = .5 + .5 * Math.sin(t / 600);
-      Rig.draw(cx, { key: 'golem', hide: 'boss', t: t / 1000, p: .15, kickM: s * .5, kickB: 0, flashM: 0, flashB: 0, koM: 0, koB: 0, scars: 0, shield: 0, blockT: 0, charge: 0, turbo: false, raged: false, stun: 0, hpFrac: 1, introM: 0, introB: 0, col: P.col });
+      Rig.draw(cx, { key: 'golem', lkey: P.fk, hide: 'boss', t: t / 1000, p: .15, kickM: s * .5, kickB: 0, flashM: 0, flashB: 0, koM: 0, koB: 0, scars: 0, shield: 0, blockT: 0, charge: 0, turbo: false, raged: false, stun: 0, hpFrac: 1, introM: 0, introB: 0, col: P.col });
       prevRaf = requestAnimationFrame(frame);
     };
     stopPrev(); prevRaf = requestAnimationFrame(frame);
@@ -198,7 +200,7 @@
 
   function renderProf() {
     const c = $('#dlProf'); c.innerHTML = '';
-    c.append(el('h3', '', 'Твой бык'), el('div', 'muted small', 'Цвет и аватарка только для красоты. В бою всё решают знания: сила толчка у всех одинаковая.'));
+    c.append(el('h3', '', 'Твой боец'), el('div', 'muted small', 'Боец, цвет и аватарка только для красоты. В бою всё решают знания: сила толчка у всех одинаковая.'));
     const top = el('div', 'dl-top');
     const cv = el('canvas', 'dl-prev'); cv.width = 300; cv.height = 190; top.append(cv);
     const f = el('div', 'dl-form');
@@ -206,7 +208,8 @@
     f.append(inp);
     const av = el('div', 'dl-av'); AVS.forEach((a) => { const b = el('button', a === P.av ? 'on' : '', a); b.onclick = () => { P.av = a; save(); renderProf(); hello(); }; av.append(b); }); f.append(av);
     top.append(f); c.append(top);
-    const cols = el('div', 'dl-cols'); COLS.forEach(([n, h]) => { const b = el('button', h === P.col ? 'on' : ''); b.style.background = h; b.title = n; b.setAttribute('aria-label', n); b.onclick = () => { P.col = h; save(); renderProf(); hello(); }; cols.append(b); }); c.append(cols);
+    const fg = el('div', 'dl-fig'); FIGH.forEach(([k, n]) => { const b = el('button', k === P.fk ? 'on' : ''); const im = el('img'); im.src = `arena/${k}.webp`; im.alt = ''; b.append(im, el('span', '', n)); b.onclick = () => { P.fk = k; save(); renderProf(); hello(); }; fg.append(b); }); c.append(fg);
+    const cols = el('div', 'dl-cols'); if (P.fk !== 'bull') cols.hidden = true; COLS.forEach(([n, h]) => { const b = el('button', h === P.col ? 'on' : ''); b.style.background = h; b.title = n; b.setAttribute('aria-label', n); b.onclick = () => { P.col = h; save(); renderProf(); hello(); }; cols.append(b); }); c.append(cols);
     preview(cv);
   }
 
@@ -240,7 +243,7 @@
       const col = el('div', 'dl-team'); col.append(el('div', 'th', 'Команда ' + (t ? 'Б' : 'А')));
       tm.forEach((x) => {
         const a = el('div', 'dl-pl'); a.style.setProperty('--c', x.col);
-        a.append(el('i', '', x.av), el('b', '', x.name + (x.id === myId ? ' (ты)' : '')));
+        const fi = el('img', 'fi'); fi.src = `arena/${x.fk || 'bull'}.webp`; fi.alt = ''; a.append(fi, el('i', '', x.av), el('b', '', x.name + (x.id === myId ? ' (ты)' : '')));
         if (x.id === myId) { const sw = el('button', 'sw', '⇄'); sw.title = 'Сменить команду'; sw.onclick = () => { if (isHost) { teamOf[myId] = 1 - t; rebuild(true); } else send({ t: 'team', team: 1 - t }); }; a.append(sw); }
         col.append(a);
       });
