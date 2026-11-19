@@ -462,9 +462,9 @@ window.Rig = (() => {
     const gw = { gN: [P.bx + S.gN[0], S.gN[1]], gF: [P.bx + S.gF[0], S.gF[1]] };
     const bossBx = gx + B.sx + B.D(P.p) + P.introB - jit;
     if (P.introB > 1) { gw.gN = [gx + 40 + P.introB, -128]; gw.gF = [gx + 50 + P.introB, -122]; }
-    drawBull(P, S);
+    if (P.hide !== 'bull') drawBull(P, S);
     const Q = Object.assign({}, P, { bx: bossBx });
-    const an = B.draw(Q, gw);
+    const an = P.hide === 'boss' ? { body: [bossBx, -110], head: [bossBx, -170], mouth: [bossBx, -170] } : B.draw(Q, gw);
     return { contact: [gw.gN[0], gw.gN[1]], bull: [P.bx + 6, -96], bullRear: [P.bx - 50, -40], bullFront: [P.bx + 50, -40], boss: an.body, bossHead: an.head, mouth: an.mouth, bossRear: [bossBx + B.w, -40] };
   }
   return { draw, VW };

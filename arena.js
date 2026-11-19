@@ -69,6 +69,7 @@
   const me = el('div'), bossEl = el('div');
   const chars = $('#aChars'), chx = chars.getContext('2d');
   let SCL = 1, FLR = 0;
+  const offC = document.createElement('canvas'), offX = offC.getContext('2d'), tmpC = document.createElement('canvas'), tmpX = tmpC.getContext('2d');
 
   const modsBox = $('#aMods');
   Object.entries(MODS).forEach(([k, m]) => {
@@ -113,6 +114,8 @@
     shove: () => { tone('sine', 140, 40, 0.3, 0.8); noise(0.25, 0.55, 2600); },
     crit: () => { tone('sine', 170, 35, 0.4, 0.9); noise(0.35, 0.65, 4200); tone('square', 880, 1760, 0.15, 0.08, 0.05); },
     slam: () => { tone('sawtooth', 200, 60, 0.35, 0.3); noise(0.3, 0.5, 900); },
+    burst: () => { tone('sine', 80, 22, .9, 1); noise(.9, .9, 2200); tone('sawtooth', 300, 40, .5, .3); [0, .05, .1, .18, .26].forEach((d) => tone('square', 700 + Math.random() * 1500, 300, .09, .06, d)); },
+    creak: () => { tone('sawtooth', 260 + Math.random() * 260, 90, .16, .14); noise(.12, .25, 3000); },
     crash: () => { tone('sine', 90, 30, 0.6, 0.9); noise(0.6, 0.7, 1500); [0, 0.07, 0.15].forEach((d) => tone('square', 1200 + Math.random() * 800, 900, 0.08, 0.05, d + 0.1)); },
     block: () => { tone('triangle', 900, 880, 0.3, 0.25); tone('triangle', 1350, 1300, 0.35, 0.15, 0.02); },
     power: () => { tone('sawtooth', 200, 900, 0.4, 0.12); },
@@ -128,7 +131,7 @@
   /* ---------- частицы: искры, дым, огонь, шестерёнки, болты ---------- */
   const cv = $('#aFx'), cx = cv.getContext('2d');
   let parts = [], SW = 0, SH = 0;
-  function fitCanvas() { const r = stage.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1); SW = r.width; SH = r.height; cv.width = SW * d; cv.height = SH * d; cx.setTransform(d, 0, 0, d, 0, 0); chars.width = SW * d; chars.height = SH * d; SCL = SW / Rig.VW; FLR = SH * .93; }
+  function fitCanvas() { const r = stage.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1); SW = r.width; SH = r.height; cv.width = SW * d; cv.height = SH * d; cx.setTransform(d, 0, 0, d, 0, 0); chars.width = offC.width = tmpC.width = SW * d; chars.height = offC.height = tmpC.height = SH * d; SCL = SW / Rig.VW; FLR = SH * .93; }
   function burst(x, y, opt) {
     const o = Object.assign({ n: 26, colors: ['#fff6c2', '#ffd24a', '#ff8a1e'], speed: 7, life: 34, size: 3, grav: 0.25, kind: 'spark', dir: 0, spread: Math.PI * 2 }, opt);
     for (let i = 0; i < o.n && parts.length < 420; i++) {
@@ -222,11 +225,102 @@
     const e = easeBack(F.intro), d = Math.min(2, window.devicePixelRatio || 1);
     chx.setTransform(1, 0, 0, 1, 0, 0); chx.clearRect(0, 0, chars.width, chars.height);
     chx.setTransform(d * SCL, 0, 0, d * SCL, 0, d * FLR);
-    F.anc = Rig.draw(chx, {
+    const base = {
       key: F.B.key, t: performance.now() / 1000, p: clamp(F.p, -1.05, 1.05),
-      kickM: F.kickM, kickB: F.kickB, flashM: F.flashM, flashB: F.flashB, koM: F.koM || 0, koB: F.koB || 0,
+      kickM: F.kickM, kickB: F.kickB, flashM: F.flashM, flashB: F.flashB, koM: 0, koB: 0,
       scars: F.scars, shield: F.shield ? 1 : 0, blockT: F.blockT, charge: F.charge, turbo: F.boost > 0, raged: F.raged,
       stun: F.stunT, hpFrac: F.hpLeft / F.hpMax, introM: -(1 - e) * 280, introB: (1 - e) * 280
+    };
+    if (!F.fin) { F.anc = Rig.draw(chx, base); return; }
+    finaleFrame(base, d);
+  }
+  /* ---------- финал: победитель давит проигравшего и разламывает на части ---------- */
+  const eS = (x) => x * x * (3 - 2 * x);
+  function startFinale(loser) {
+    const cr = [];
+    for (let i = 0; i < 7; i++) { let u = Math.random(), v = .15 + Math.random() * .7; const pts = [[u, v]]; for (let k = 0; k < 5; k++) { u = clamp(u + (Math.random() - .5) * .3, 0, 1); v = clamp(v + (Math.random() - .5) * .4, 0, 1); pts.push([u, v]); } cr.push(pts); }
+    F.fin = { loser, t0: performance.now(), pStart: F.p, pEnd: loser === 'boss' ? Math.max(F.p, .22) : Math.min(F.p, -.22), broken: false, tiles: null, cracks: cr, sx: 1, sy: 1, pivot: 0, c0: 0, tb: 0 };
+    F.kickM = F.kickB = 0;
+  }
+  function finaleFrame(base, d) {
+    const fin = F.fin, el = (performance.now() - fin.t0) / 1000, dt = 1 / 60;
+    const pUse = fin.pStart + (fin.pEnd - fin.pStart) * eS(clamp(el / .45, 0, 1));
+    const winnerHide = fin.loser, loserHide = fin.loser === 'boss' ? 'bull' : 'boss';
+    const sqPivot = fin.pivot, sx = fin.sx;
+    if (!fin.broken) {
+      const flick = Math.sin(el * 55) > 0 ? .5 : 0;
+      offX.setTransform(1, 0, 0, 1, 0, 0); offX.clearRect(0, 0, offC.width, offC.height); offX.setTransform(d * SCL, 0, 0, d * SCL, 0, d * FLR);
+      const lr = Rig.draw(offX, Object.assign({}, base, { p: pUse, hide: loserHide, introM: 0, introB: 0, kickM: 0, kickB: 0, flashM: flick, flashB: flick, stun: 0 }));
+      fin.c0 = lr.contact[0]; fin.pivot = fin.loser === 'boss' ? lr.bossRear[0] + 24 : lr.bullRear[0] - 20;
+      const e = eS(clamp(el / 1.3, 0, 1)); fin.sx = 1 - .6 * e; fin.sy = 1 + .28 * (1 - fin.sx); fin.e = e;
+    }
+    const front = fin.pivot + (fin.c0 - fin.pivot) * fin.sx, shift = front - fin.c0;
+    F.anc = Rig.draw(chx, Object.assign({}, base, { p: pUse, hide: winnerHide, introM: shift, introB: fin.loser === 'bull' ? shift : 0 }));
+    if (!fin.broken) {
+      const jx = Math.sin(el * 70) * 1.6 * fin.e, jy = Math.sin(el * 53) * 1.2 * fin.e;
+      chx.save(); chx.translate(fin.pivot + jx, jy); chx.scale(fin.sx, fin.sy); chx.translate(-fin.pivot, 0);
+      chx.drawImage(offC, 0, -FLR / SCL, offC.width / (d * SCL), offC.height / (d * SCL)); chx.restore();
+      // трещины проступают по мере сжатия
+      const x0 = Math.min(fin.pivot, front), x1 = Math.max(fin.pivot, front), w = x1 - x0;
+      chx.lineCap = 'round'; chx.lineJoin = 'round';
+      fin.cracks.forEach((pts, ci) => {
+        const vis = clamp(fin.e * 1.4 - ci * .08, 0, 1), n = Math.ceil(vis * (pts.length - 1)); if (n < 1) return;
+        chx.beginPath(); pts.slice(0, n + 1).forEach(([u, v], i) => { const X = x0 + w * u, Y = -20 - 160 * v; i ? chx.lineTo(X, Y) : chx.moveTo(X, Y); });
+        chx.strokeStyle = '#0b0e16'; chx.lineWidth = 3.2; chx.stroke(); chx.strokeStyle = 'rgba(255,170,60,.95)'; chx.lineWidth = 1.2; chx.stroke();
+      });
+      // искры, шестерни, дым и скрип из сжимаемой туши
+      const e = fin.e, rx = () => VX(x0 + Math.random() * w), ry = () => VY(-30 - Math.random() * 130);
+      for (let i = every('fx', 16 + 70 * e, dt); i--;) burst(rx(), ry(), { n: 2, speed: 6, life: 20, size: 2.2 });
+      for (let i = every('fg', 2 + 9 * e, dt); i--;) { if (Math.random() < .6) gears(rx(), ry(), 1, -Math.PI / 2 + (fin.loser === 'boss' ? .5 : -.5)); else bolts(rx(), ry(), 2); }
+      for (let i = every('fm', 8 * e, dt); i--;) burst(rx(), ry(), { n: 1, kind: 'smoke', colors: ['rgba(70,70,80,.6)'], speed: 1, life: 55, grav: -.05, size: 4 });
+      for (let i = every('fb', 4, dt); i--;) { const gx = rx(), gy = ry(); burst(gx, gy, { n: 8, colors: ['#fff6c2', '#ff8a1e'], speed: 8, life: 14, size: 2.6 }); }
+      for (let i = every('sn', 5, dt); i--;) { SFX.creak(); vib(15); }
+      for (let i = every('sk', 3.5, dt); i--;) anim(stage, 'shake', 220);
+      if (el >= 1.35) doBreak(d);
+    } else drawTiles(d, dt);
+  }
+  function doBreak(d) {
+    const fin = F.fin; fin.broken = true; fin.tb = performance.now();
+    tmpX.setTransform(1, 0, 0, 1, 0, 0); tmpX.clearRect(0, 0, tmpC.width, tmpC.height); tmpX.setTransform(d * SCL, 0, 0, d * SCL, 0, d * FLR);
+    tmpX.save(); tmpX.translate(fin.pivot, 0); tmpX.scale(fin.sx, fin.sy); tmpX.translate(-fin.pivot, 0);
+    tmpX.drawImage(offC, 0, -FLR / SCL, offC.width / (d * SCL), offC.height / (d * SCL)); tmpX.restore();
+    const front = fin.pivot + (fin.c0 - fin.pivot) * fin.sx, x0 = Math.min(fin.pivot, front) - 90, x1 = Math.max(fin.pivot, front) + 90, y0 = -260, y1 = 6;
+    const COLS = 7, ROWS = 5, V = [];
+    for (let j = 0; j <= ROWS; j++) { V[j] = []; for (let i = 0; i <= COLS; i++) { const edge = i === 0 || j === 0 || i === COLS || j === ROWS, jt = edge ? 0 : .3; V[j][i] = [x0 + (x1 - x0) * (i + (Math.random() - .5) * jt) / COLS, y0 + (y1 - y0) * (j + (Math.random() - .5) * jt) / ROWS]; } }
+    const dir = fin.loser === 'boss' ? 1 : -1, tiles = [], k = d * SCL;
+    for (let j = 0; j < ROWS; j++) for (let i = 0; i < COLS; i++) {
+      const q = [V[j][i], V[j][i + 1], V[j + 1][i + 1], V[j + 1][i]], cxq = q.reduce((a, p) => a + p[0], 0) / 4, cyq = q.reduce((a, p) => a + p[1], 0) / 4;
+      const bx0 = Math.max(0, Math.floor(Math.min(...q.map((p) => p[0])) * k)), bx1 = Math.min(tmpC.width, Math.ceil(Math.max(...q.map((p) => p[0])) * k));
+      const by0 = Math.max(0, Math.floor(d * FLR + Math.min(...q.map((p) => p[1])) * k)), by1 = Math.min(tmpC.height, Math.ceil(d * FLR + Math.max(...q.map((p) => p[1])) * k));
+      if (bx1 - bx0 < 2 || by1 - by0 < 2) continue;
+      const im = tmpX.getImageData(bx0, by0, bx1 - bx0, by1 - by0).data; let a = 0; for (let n = 3; n < im.length; n += 16) a += im[n] > 40 ? 1 : 0;
+      if (a < im.length / 16 * .08) continue;
+      tiles.push({ q, c0x: cxq, c0y: cyq, x: cxq, y: cyq, r: 0, vx: dir * (10 + Math.random() * 110) - dir * 60 * Math.random() + (cxq - (x0 + x1) / 2) * 1.1, vy: -(260 + Math.random() * 520 + (1 - (cyq - y0) / (y1 - y0)) * 120), vr: (Math.random() - .5) * 14, rest: false });
+    }
+    fin.tiles = tiles;
+    const bxp = VX(front), byp = VY(-110);
+    anim(stage, 'shake big', 800); anim($('#aVign'), 'white', 350); anim($('#aVign'), 'red', 700);
+    burst(bxp, byp, { n: 90, speed: 14, size: 4 }); burst(bxp, byp, { n: 40, colors: ['#ffffff', '#ffd24a', '#ff6a1e'], speed: 9, life: 50, size: 5 });
+    burst(bxp, byp, { n: 16, kind: 'gear', colors: ['#9aa6bd', '#c3ccdc', '#6f7a90', '#d9a441', F.B.color], speed: 10, life: 95, grav: .32, size: 4, dir: -Math.PI / 2, spread: 3.4 });
+    burst(bxp, byp, { n: 16, kind: 'bolt', colors: ['#cfd6e4', '#8892a6'], speed: 10, life: 70, grav: .35, size: 3, dir: -Math.PI / 2, spread: 3.4 });
+    burst(bxp, byp, { n: 14, kind: 'smoke', colors: ['rgba(120,120,130,.55)', 'rgba(50,50,60,.5)'], speed: 3, life: 90, grav: -.04, size: 7 });
+    SFX.burst(); vib([80, 40, 160]);
+  }
+  function drawTiles(d, dt) {
+    const fin = F.fin, age = (performance.now() - fin.tb) / 1000;
+    fin.tiles.forEach((t) => {
+      if (!t.rest) {
+        t.vy += 1100 * dt; t.x += t.vx * dt; t.y += t.vy * dt; t.r += t.vr * dt;
+        if (t.y > -8) { t.y = -8; t.vy *= -.35; t.vx *= .6; t.vr *= .55; if (Math.abs(t.vy) < 35) { t.vy = 0; t.vx *= .5; } }
+        if (t.y >= -8 && t.vy === 0 && Math.abs(t.vx) < 6) t.rest = true;
+      }
+      chx.save(); chx.globalAlpha = clamp(1 - (age - 2) / 1.2, 0, 1);
+      chx.translate(t.x, t.y); chx.rotate(t.r); chx.translate(-t.c0x, -t.c0y);
+      chx.beginPath(); t.q.forEach((p, i) => i ? chx.lineTo(p[0], p[1]) : chx.moveTo(p[0], p[1])); chx.closePath();
+      chx.save(); chx.clip(); chx.drawImage(tmpC, 0, -FLR / SCL, tmpC.width / (d * SCL), tmpC.height / (d * SCL)); chx.restore();
+      chx.lineWidth = 1.6; chx.strokeStyle = '#0b0e16'; chx.stroke();
+      chx.restore();
+      if (!t.rest && Math.random() < .25) burst(VX(t.x), VY(t.y), { n: 1, speed: 2, life: 14, size: 2, grav: .1 });
     });
   }
   function paused(now) {
@@ -260,6 +354,17 @@
       if (speed > 0.05) for (let i = every('db', 14, dt); i--;) burst(bossX() + SW * F.B.w * 0.75, SH * 0.92, { n: 1, kind: 'smoke', colors: ['rgba(150,150,160,.35)'], speed: 1.2, life: 40, grav: -0.02, size: 3 });
     }
     const mx = F.anc ? VX(F.anc.bull[0]) : SW * .3, my = F.anc ? VY(F.anc.bull[1]) : SH * .5;
+    if (!F.ko && F.anc && !paused(Date.now())) {
+      const A_ = F.anc, strain = clamp(.5 + Math.abs(speed) * .35 + Math.abs(F.p) * .25, 0, 1.4), fl = FLR;
+      // копыта быка скребут пол: искры веером назад
+      for (let i = every('fs1', 9 + 26 * strain, dt); i--;) burst(VX(A_.bullFront[0] - Math.random() * 55), fl, { n: 2, speed: 5 + 4 * strain, life: 15, size: 2.2, grav: .3, dir: -Math.PI * .86, spread: .75 });
+      for (let i = every('fs2', 6 + 18 * strain, dt); i--;) burst(VX(A_.bullRear[0] + Math.random() * 30), fl, { n: 2, speed: 5 + 3 * strain, life: 14, size: 2, grav: .3, dir: -Math.PI * .84, spread: .75 });
+      // лапы босса — искры вперёд-вверх
+      for (let i = every('fs3', 7 + 22 * strain, dt); i--;) burst(VX(A_.boss[0] + (Math.random() - .3) * 120), fl, { n: 2, speed: 5 + 3 * strain, life: 15, size: 2.2, grav: .3, dir: -Math.PI * .14, spread: .75, colors: ['#fff6c2', '#ffd24a', F.B.color] });
+      // пар из труб от натуги
+      for (let i = every('st1', 3 + 11 * strain, dt); i--;) burst(VX(A_.bull[0] - 24 + Math.random() * 14), VY(A_.bull[1] - 42), { n: 1, kind: 'smoke', colors: ['rgba(238,243,250,.6)', 'rgba(206,214,226,.5)'], speed: 1.7, life: 36, grav: -.05, size: 3.2, dir: -Math.PI / 2 - .2, spread: .6 });
+      for (let i = every('st2', 2 + 8 * strain, dt); i--;) burst(VX(A_.boss[0] + (Math.random() - .5) * 60), VY(A_.boss[1] - 40), { n: 1, kind: 'smoke', colors: ['rgba(238,243,250,.55)', 'rgba(206,214,226,.45)'], speed: 1.5, life: 34, grav: -.05, size: 3, dir: -Math.PI / 2 + .2, spread: .6 });
+    }
     if (danger > 0.05) {
       for (let i = every('ms', 10 * danger, dt); i--;) burst(mx - SW * 0.08, my - SH * 0.12, { n: 1, kind: 'smoke', colors: ['rgba(90,90,100,.55)', 'rgba(60,60,70,.5)'], speed: 1, life: 55, grav: -0.05, size: 4, dir: -Math.PI / 2, spread: 0.8 });
       for (let i = every('mk', 9 * danger, dt); i--;) burst(mx + (Math.random() - 0.5) * SW * 0.18, my + (Math.random() - 0.5) * SH * 0.25, { n: 4, speed: 4, life: 16, size: 2 });
@@ -299,7 +404,7 @@
   function start(g) {
     const sec = g.arena.sec, B = bossOf(sec);
     F = { sec, B, hpMax: g.q.length, hpLeft: g.q.length, dmg: 0, boost: 0, shield: false, ko: false, raged: false, clawUsed: false,
-      p: 0, pt: 0, hold: Date.now() + 2600, scars: 0, koDir: 0 };
+      p: 0, pt: 0, hold: Date.now() + 2600, scars: 0, koDir: 0, kickM: 0, kickB: 0, flashM: 0, flashB: 0, blockT: 0, charge: 0, stunT: 0, fin: null, anc: null };
     game.classList.add('arena'); stageWrap.hidden = false;
     $('#aBName').textContent = B.name.toUpperCase();
     bossEl.className = ''; me.className = '';
@@ -457,21 +562,14 @@
     if (won) {
       setTimeout(() => {
         if (!F) return;
-        say(F.B.die, 1500); anim(me, 'shove', 520); F.koDir = 1;
-        let k = 0; const t = setInterval(() => {
-          if (!F) return clearInterval(t);
-          const x = bossX() + SW * F.B.w * 0.4, y = SH * 0.5;
-          burst(x + (Math.random() - 0.5) * 100, y + (Math.random() - 0.5) * 80, { n: 30, speed: 9, colors: ['#fff6c2', '#ffd24a', '#ff8a1e', F.B.color] });
-          gears(x, y, 3, -Math.PI / 2 + 0.3, [F.B.color, '#9aa6bd', '#6f7a90', '#d9a441']); bolts(x, y, 3);
-          SFX.shove(); anim(stage, 'shake', 300);
-          if (++k >= 5) { clearInterval(t); bossEl.classList.add('ko'); burst(x, y, { n: 18, colors: ['rgba(120,120,130,.5)'], kind: 'smoke', speed: 2, life: 70, grav: -0.05, size: 6 }); banner('ПОБЕДА!', 'win', 1600); SFX.win(); vib([40, 30, 40, 30, 120]); }
-        }, 240);
-      }, 400);
-      setTimeout(go, 3000);
+        say(F.B.die, 1700); anim(me, 'shove', 520); startFinale('boss'); SFX.grind && SFX.grind();
+      }, 350);
+      setTimeout(() => { if (F) { banner('ПОБЕДА!', 'win', 1600); SFX.win(); vib([40, 30, 40, 30, 120]); } }, 2000);
+      setTimeout(go, 4300);
     } else {
-      F.koDir = -1;
-      setTimeout(() => { if (!F) return; me.classList.add('ko'); gears(SW * 0.2, SH * 0.5, 8); bolts(SW * 0.2, SH * 0.5, 6); banner('ПОРАЖЕНИЕ', 'lose', 1500); SFX.lose(); say(F.B.win, 1800); }, 700);
-      setTimeout(go, 2800);
+      setTimeout(() => { if (!F) return; startFinale('bull'); say(F.B.win, 1800); }, 500);
+      setTimeout(() => { if (F) { banner('ПОРАЖЕНИЕ', 'lose', 1500); SFX.lose(); } }, 2150);
+      setTimeout(go, 4300);
     }
     return true;
   }
