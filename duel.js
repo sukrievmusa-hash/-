@@ -11,12 +11,6 @@
 
   const AVS = ['🐂', '🦊', '🐼', '🐯', '🦁', '🐸', '🐵', '🦄', '🐲', '🤖', '👾', '🥷'];
   const COLS = [['Синий', '#2f7dff'], ['Красный', '#e5483c'], ['Зелёный', '#2fbf6a'], ['Фиолет', '#9b5cff'], ['Оранж', '#ff8a1e'], ['Золото', '#f2b705'], ['Розовый', '#ff5fa8'], ['Бирюза', '#19c6c0']];
-  const PERKS = [
-    { k: 'pow', ic: '💪', n: 'Мощь', d: '+12% к силе толчка за ранг' },
-    { k: 'arm', ic: '🛡', n: 'Броня', d: 'Ошибка откатывает на 25% меньше за ранг' },
-    { k: 'tur', ic: '⚡', n: 'Рывок', d: 'Дольше действует быстрый ответ: крит чаще и сильнее' },
-    { k: 'fur', ic: '🔥', n: 'Ярость', d: '+15% к силе, пока тебя теснят' }
-  ];
   const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt'];
   const LIMIT = 240; // секунд на бой, потом решает положение быков
   const MAXP = 4;
@@ -26,13 +20,8 @@
   if (!P.name) P.name = 'Игрок' + (100 + Math.floor(Math.random() * 900));
   if (!P.av) P.av = rnd(AVS);
   if (!P.col) P.col = rnd(COLS)[1];
-  P.perks = Object.assign({ pow: 0, arm: 0, tur: 0, fur: 0 }, P.perks);
-  const wins = () => Object.values(A.wins || {}).reduce((a, b) => a + b, 0);
-  const points = () => level(S.stats.xp) + Math.floor(wins() / 2) + (A.duelWins || 0);
-  const used = () => Object.values(P.perks).reduce((a, b) => a + b, 0);
-  if (used() > points()) P.perks = { pow: 0, arm: 0, tur: 0, fur: 0 };
   const myId = Math.random().toString(36).slice(2, 8);
-  const mine = () => ({ id: myId, name: P.name.slice(0, 12), av: P.av, col: P.col, perks: Object.assign({}, P.perks) });
+  const mine = () => ({ id: myId, name: P.name.slice(0, 12), av: P.av, col: P.col });
 
   /* ---------- MQTT по WebSocket ---------- */
   const enc = new TextEncoder(), dec = new TextDecoder();
@@ -122,12 +111,9 @@
   }
 
   /* ---------- бой ---------- */
-  function calc(right, crit, p) { // сила толчка: у каждого быка свои перки
-    const pk = P.perks, f = match.fac;
-    if (!right) return -0.14 * (1 - 0.25 * pk.arm) * f;
-    let d = crit ? 0.3 : 0.2;
-    d *= 1 + 0.12 * pk.pow; if (p < -0.35) d *= 1 + 0.15 * pk.fur; if (crit) d += 0.03 * pk.tur;
-    return d * f;
+  function calc(right, crit) { // сила толчка одинакова у всех: решают только знания и скорость ответа
+    const f = match.fac;
+    return right ? (crit ? 0.3 : 0.2) * f : -0.14 * f;
   }
   function beginMatch(l, s) {
     const meE = l.find((x) => x.id === myId); if (!meE) return;
@@ -142,7 +128,7 @@
     let q = shuffle(pool).slice(0, 60); while (q.length < 40) q = q.concat(shuffle(pool));
     const fac = 2 / (mates.length + 2);
     const D = {
-      me: Object.assign({}, meE, { perks: P.perks }), mates, foes, myTeam: meE.team, rcol: foes[0].col === meE.col ? COLS.find((c) => c[1] !== meE.col)[1] : foes[0].col, calc,
+      me: meE, mates, foes, myTeam: meE.team, rcol: foes[0].col === meE.col ? COLS.find((c) => c[1] !== meE.col)[1] : foes[0].col, calc,
       send: (o) => send(o), localEnd: (won) => endMatch(won ? meE.team : 1 - meE.team, null, true)
     };
     match = { D, myTeam: meE.team, fac, ended: false, seen: {}, left: {}, t0: Date.now(), list: l };
@@ -188,7 +174,7 @@
   /* ---------- экран «Дуэль» ---------- */
   const box = el('div', 'overlay dlobby'); box.id = 'duelLobby'; box.hidden = true;
   box.innerHTML = `<div class="hubbox"><div class="gtop"><button class="x" id="dlClose" aria-label="Закрыть">✕</button><h2>ДУЭЛЬ</h2></div>
-    <div class="muted small hubnote">Бык против быка. У каждого свои карточки: верный ответ толкает быка соперника, ошибка откатывает твоего. Кто первым вдавит соперника в стену, тот выиграл. Можно 2 на 2: позови друзей по ссылке.</div>
+    <div class="muted small hubnote">Бык против быка. Прокачки нет: решают только знания. У каждого свои карточки: верный ответ толкает быка соперника, быстрый — сильнее, ошибка откатывает твоего. Кто первым вдавит соперника в стену, тот выиграл. Можно 2 на 2: позови друзей по ссылке.</div>
     <div class="dl-card" id="dlProf"></div>
     <div class="dl-card" id="dlRoom"></div></div>`;
   document.body.append(box);
@@ -212,7 +198,7 @@
 
   function renderProf() {
     const c = $('#dlProf'); c.innerHTML = '';
-    c.append(el('h3', '', 'Твой бык'));
+    c.append(el('h3', '', 'Твой бык'), el('div', 'muted small', 'Цвет и аватарка только для красоты. В бою всё решают знания: сила толчка у всех одинаковая.'));
     const top = el('div', 'dl-top');
     const cv = el('canvas', 'dl-prev'); cv.width = 300; cv.height = 190; top.append(cv);
     const f = el('div', 'dl-form');
@@ -221,16 +207,6 @@
     const av = el('div', 'dl-av'); AVS.forEach((a) => { const b = el('button', a === P.av ? 'on' : '', a); b.onclick = () => { P.av = a; save(); renderProf(); hello(); }; av.append(b); }); f.append(av);
     top.append(f); c.append(top);
     const cols = el('div', 'dl-cols'); COLS.forEach(([n, h]) => { const b = el('button', h === P.col ? 'on' : ''); b.style.background = h; b.title = n; b.setAttribute('aria-label', n); b.onclick = () => { P.col = h; save(); renderProf(); hello(); }; cols.append(b); }); c.append(cols);
-    c.append(el('div', 'dl-pts', `Прокачка: свободно очков ${points() - used()} из ${points()} (растут с уровнем и победами)`));
-    PERKS.forEach((pk) => {
-      const r = el('div', 'dl-perk');
-      const t = el('div', 'pt'); t.append(el('b', '', `${pk.ic} ${pk.n}`), el('span', 'muted small', pk.d));
-      const ctl = el('div', 'pc');
-      const m = el('button', '', '−'), pl = el('button', '', '+'), n = el('span', '', '●'.repeat(P.perks[pk.k]) + '○'.repeat(3 - P.perks[pk.k]));
-      m.disabled = P.perks[pk.k] <= 0; pl.disabled = P.perks[pk.k] >= 3 || used() >= points();
-      m.onclick = () => { P.perks[pk.k]--; save(); renderProf(); hello(); }; pl.onclick = () => { P.perks[pk.k]++; save(); renderProf(); hello(); };
-      ctl.append(m, n, pl); r.append(t, ctl); c.append(r);
-    });
     preview(cv);
   }
 
@@ -265,7 +241,6 @@
       tm.forEach((x) => {
         const a = el('div', 'dl-pl'); a.style.setProperty('--c', x.col);
         a.append(el('i', '', x.av), el('b', '', x.name + (x.id === myId ? ' (ты)' : '')));
-        const pk = PERKS.filter((p) => x.perks && x.perks[p.k]).map((p) => p.ic + x.perks[p.k]).join(' '); if (pk) a.append(el('span', 'muted small', pk));
         if (x.id === myId) { const sw = el('button', 'sw', '⇄'); sw.title = 'Сменить команду'; sw.onclick = () => { if (isHost) { teamOf[myId] = 1 - t; rebuild(true); } else send({ t: 'team', team: 1 - t }); }; a.append(sw); }
         col.append(a);
       });

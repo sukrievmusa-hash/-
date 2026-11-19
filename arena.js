@@ -437,7 +437,7 @@
     if (!F || F.ko) return;
     const c = G.q[G.i];
     if (F.duel) {
-      const D = F.duel, crit = right && Date.now() - G.t0 < (6000 + 35 * c.q.length) * (1 + .25 * D.me.perks.tur);
+      const D = F.duel, crit = right && Date.now() - G.t0 < (6000 + 35 * c.q.length);
       const d = D.calc(right, crit, F.p);
       if (right) shove(crit, d); else duelSlip(d);
       D.send({ t: 'push', d, crit: crit ? 1 : 0 });
