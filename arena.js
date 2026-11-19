@@ -20,6 +20,7 @@
       start: 'Я бесконечен. А твоё терпение?', rage: 'Частные производные меня не остановят!',
       win: 'Бесконечность всегда побеждает.', die: 'Экстремум… найден…' }
   };
+  const duelBoss = (D) => ({ key: 'rival', name: D.foes[0].name, color: D.rcol, glow: 'rgba(255,200,80,.5)', front: 0.05, rate: 0, w: 0.4, start: '', rage: '', win: '', die: '' });
   const MODS = {
     claw: { name: 'Гидро-руки', what: 'Убирают два неверных варианта ответа' },
     shield: { name: 'Энерго-щит', what: 'Один раз держит удар: ошибку или стену' },
@@ -43,7 +44,7 @@
   const stageWrap = el('div'); stageWrap.id = 'arena'; stageWrap.hidden = true;
   stageWrap.innerHTML = `
     <div class="ahud">
-      <div class="aside me"><div class="aname">МЕХ-БЫК</div><div class="hp"><i class="lag" id="aPLag"></i><i class="fill" id="aPHp"></i></div></div>
+      <div class="aside me"><div class="aname" id="aMName">МЕХ-БЫК</div><div class="hp"><i class="lag" id="aPLag"></i><i class="fill" id="aPHp"></i></div></div>
       <div class="avs">VS</div>
       <div class="aside bs"><div class="aname" id="aBName"></div><div class="hp boss"><i class="lag" id="aBLag"></i><i class="fill" id="aBHp"></i></div></div>
     </div>
@@ -228,7 +229,9 @@
     const base = {
       key: F.B.key, t: performance.now() / 1000, p: clamp(F.p, -1.05, 1.05),
       kickM: F.kickM, kickB: F.kickB, flashM: F.flashM, flashB: F.flashB, koM: 0, koB: 0,
-      scars: F.scars, shield: F.shield ? 1 : 0, blockT: F.blockT, charge: F.charge, turbo: F.boost > 0, raged: F.raged,
+      col: F.duel ? F.duel.me.col : undefined, rcol: F.duel ? F.duel.rcol : undefined,
+      rscars: F.duel ? (F.p > .6 ? 2 : F.p > .35 ? 1 : 0) : 0,
+      scars: F.duel ? (F.p < -.6 ? 2 : F.p < -.35 ? 1 : 0) : F.scars, shield: F.shield ? 1 : 0, blockT: F.blockT, charge: F.charge, turbo: F.boost > 0, raged: F.raged,
       stun: F.stunT, hpFrac: F.hpLeft / F.hpMax, introM: -(1 - e) * 280, introB: (1 - e) * 280
     };
     if (!F.fin) { F.anc = Rig.draw(chx, base); return; }
@@ -335,8 +338,8 @@
     if (!paused(now)) F.pt -= F.B.rate * (F.raged ? 1.35 : 1) * (G.practice ? 0.8 : 1) * dt;
     if (F.koDir) F.pt += F.koDir * dt * 1.4;
     F.p += (F.pt - F.p) * Math.min(1, dt * 9);
-    if (!F.ko && F.pt <= -1) wallHit();
-    if (!F.ko && F.pt >= 1) bossWall();
+    if (!F.ko && F.pt <= -1) F.duel ? duelWall(false) : wallHit();
+    if (!F.ko && F.pt >= 1) F.duel ? duelWall(true) : bossWall();
     place();
     drawChars(dt);
     emit(dt, (F.p - prev) / Math.max(dt, 1e-3));
@@ -402,11 +405,14 @@
   }
 
   function start(g) {
-    const sec = g.arena.sec, B = bossOf(sec);
-    F = { sec, B, hpMax: g.q.length, hpLeft: g.q.length, dmg: 0, boost: 0, shield: false, ko: false, raged: false, clawUsed: false,
+    const sec = g.arena.sec, DU = g.arena.duel || null, B = DU ? duelBoss(DU) : bossOf(sec);
+    F = {duel: DU, sec, B, hpMax: g.q.length, hpLeft: g.q.length, dmg: 0, boost: 0, shield: false, ko: false, raged: false, clawUsed: false,
       p: 0, pt: 0, hold: Date.now() + 2600, scars: 0, koDir: 0, kickM: 0, kickB: 0, flashM: 0, flashB: 0, blockT: 0, charge: 0, stunT: 0, fin: null, anc: null };
     game.classList.add('arena'); stageWrap.hidden = false;
-    $('#aBName').textContent = B.name.toUpperCase();
+    game.classList.toggle('duelmode', !!DU); modsBox.hidden = !!DU;
+    $('#aMName').textContent = DU ? [DU.me, ...DU.mates].map((x) => x.av + ' ' + x.name).join(' · ') : 'МЕХ-БЫК';
+    $('#aBName').textContent = DU ? DU.foes.map((x) => x.av + ' ' + x.name).join(' · ') : B.name.toUpperCase();
+    if (DU) { F.hpMax = F.hpLeft = 1; F.hold = Date.now() + 1800; }
     bossEl.className = ''; me.className = '';
     $('#aBLag').style.width = '100%'; $('#aPLag').style.width = '100%';
     stage.querySelectorAll('.ftxt').forEach((n) => n.remove());
@@ -424,20 +430,27 @@
     setTimeout(() => { if (F) { say(B.start); SFX.roar(); } }, 1500);
     last = 0; if (!raf) raf = requestAnimationFrame(loop);
   }
-  function stop() { F = null; grindOff(); game.classList.remove('arena'); stageWrap.hidden = true; parts = []; }
+  function stop() { if (window.Duel) Duel.onStop(); F = null; game.classList.remove('duelmode'); modsBox.hidden = false; grindOff(); game.classList.remove('arena'); stageWrap.hidden = true; parts = []; }
 
   /* верный вариант — бык толкает сразу; неверный — рывок босса */
   function onPick(right) {
     if (!F || F.ko) return;
     const c = G.q[G.i];
+    if (F.duel) {
+      const D = F.duel, crit = right && Date.now() - G.t0 < (6000 + 35 * c.q.length) * (1 + .25 * D.me.perks.tur);
+      const d = D.calc(right, crit, F.p);
+      if (right) shove(crit, d); else duelSlip(d);
+      D.send({ t: 'push', d, crit: crit ? 1 : 0 });
+      return;
+    }
     if (right) {
       F.crit = Date.now() - G.t0 < 6000 + 35 * c.q.length || (G.combo > 0 && (G.combo + 1) % 3 === 0);
       shove(F.crit);
     } else { bossSlam(); F.hurtShown = true; }
     renderMods();
   }
-  function shove(crit) {
-    const turbo = F.boost > 0, push = (crit ? 0.5 : 0.36) * (turbo ? 1.5 : 1);
+  function shove(crit, amt) {
+    const turbo = F.boost > 0, push = amt != null ? amt : (crit ? 0.5 : 0.36) * (turbo ? 1.5 : 1);
     anim(me, turbo ? 'shove turbo' : 'shove', 520); anim(bossEl, 'pushed', 520);
     F.pt = Math.min(1.05, F.pt + push); F.hold = Date.now() + 1100;
     setTimeout(() => {
@@ -471,6 +484,48 @@
       gears(x - 20, y, 2, -Math.PI / 2 - 0.6); bolts(x - 20, y, 2, -Math.PI / 2 - 0.5);
       floatText('−1 ❤', x - 30, y - 70, 'hurt');
     }, 200);
+  }
+  /* ---------- дуэль ---------- */
+  function duelSlip(d) { // моя ошибка: бык откатывается
+    anim(me, 'hurt', 600); anim(stage, 'shake', 300); SFX.slam(); vib(30);
+    F.pt = Math.max(-1.05, F.pt + d);
+    const x = contactX(), y = contactY();
+    burst(x, y, { n: 18, colors: ['#ffd24a', '#fff'], speed: 6, life: 24, dir: Math.PI, spread: 2.4 });
+    floatText('ошибка', x - 40, y - 60, 'hurt');
+  }
+  function duelMsg(d, crit, av, mate) { // чужой толчок или чужая ошибка
+    if (!F || F.ko) return;
+    const x = contactX(), y = contactY();
+    if (mate) { // свой напарник: тянет в нашу сторону
+      F.pt = clamp(F.pt + d, -1.05, 1.05);
+      if (d > 0) { anim(me, 'charge', 500); floatText(av + ' ' + (crit ? 'КРИТ!' : '+'), x - SW * .25, y - 80, crit ? 'critw' : ''); }
+      return;
+    }
+    F.pt = clamp(F.pt - d, -1.05, 1.05);
+    if (d > 0) {
+      anim(bossEl, 'slam', 520); anim(me, 'hurt', 600); anim(stage, crit ? 'shake big' : 'shake', crit ? 500 : 350);
+      SFX.slam(); vib(crit ? [50, 30, 60] : 30);
+      burst(x, y, { n: crit ? 46 : 28, colors: [F.B.color, '#ffd24a', '#fff'], speed: crit ? 10 : 7, life: 28, dir: Math.PI, spread: 2.6 });
+      gears(x - 20, y, crit ? 3 : 1, -Math.PI / 2 - 0.6);
+      floatText(av + (crit ? ' КРИТ!' : ''), x + 30, y - 80, crit ? 'critw' : 'hurt');
+    } else { anim(bossEl, 'hit', 500); floatText(av + ' ошибся', x + 30, y - 70, 'turbo'); }
+  }
+  function duelWall(won) {
+    if (F.wallSent) return; F.wallSent = true;
+    F.duel.localEnd(won);
+  }
+  function duelFinish(won, why) {
+    if (!F || F.ko) return;
+    F.ko = true; F.duelRes = { won, why }; renderMods();
+    ['#gGrades', '#gShow', '#gNext', '#gExplain', '#gOpts'].forEach((q) => { $(q).hidden = true; });
+    $('.flash').classList.add('kofade'); $('#aWarn').classList.remove('on');
+    const g = G, go = () => { if (G === g && !g.done) finish(); };
+    if (won === null) { banner('НИЧЬЯ', 'go', 1600); setTimeout(go, 2200); return; }
+    if (won) g.xp += 25;
+    if (why === 'left') { banner('СОПЕРНИК ВЫШЕЛ', 'win', 1500); setTimeout(go, 2000); return; }
+    setTimeout(() => { if (F) { anim(won ? me : bossEl, 'shove', 520); startFinale(won ? 'boss' : 'bull'); SFX.grind && SFX.grind(); } }, 250);
+    setTimeout(() => { if (F) { banner(won ? 'ПОБЕДА!' : 'ПОРАЖЕНИЕ', won ? 'win' : 'lose', 1600); won ? SFX.win() : SFX.lose(); vib([40, 30, 40, 30, 120]); } }, 1950);
+    setTimeout(go, 4300);
   }
   /* быка дожали до стены */
   function wallHit() {
@@ -508,6 +563,10 @@
   function onGrade(g, gain) {
     if (!F) return;
     const c = $('#aCombo');
+    if (F.duel) {
+      if (g && G.combo >= 3) { c.textContent = 'КОМБО ×' + G.combo; c.className = 'acombo'; void c.offsetWidth; c.className = 'acombo on' + (G.combo >= 6 ? ' hot' : ''); } else c.className = 'acombo';
+      return;
+    }
     if (g === 0) {
       if (!F.hurtShown) bossSlam();
       F.hurtShown = false; c.className = 'acombo';
@@ -527,6 +586,7 @@
     setTimeout(renderMods, 50);
   }
   function useShield() { // ошибка при включённом щите: сердце не теряется
+    if (F && F.duel) return true; // в дуэли сердец нет
     if (!F || !F.shield) return false;
     F.shield = false;
     if (F.hurtShown) me.classList.remove('shielded'); else F.blockNext = true;
@@ -581,6 +641,7 @@
     return got;
   }
   function result(r, g, up, lvl) {
+    if (g.arena.duel) return duelResult(r, g, up, lvl);
     const B = F ? F.B : bossOf(g.arena.sec), sec = g.arena.sec, won = g.hearts > 0;
     const dmg = F ? F.dmg : 0;
     grindOff();
@@ -609,6 +670,26 @@
     const hub = el('button', 'ghost', 'Все боссы'); hub.onclick = () => { closeGame(); openHub(); };
     const home = el('button', 'ghost', 'На главную'); home.onclick = closeGame;
     r.append(hub, home);
+  }
+
+  function duelResult(r, g, up, lvl) {
+    const D = g.arena.duel, res = (F && F.duelRes) || { won: false }, won = res.won;
+    grindOff(); stageWrap.hidden = true;
+    r.classList.add('aresult', won ? 'won' : 'lost');
+    if (won) { A.duelWins = (A.duelWins || 0) + 1; save(); }
+    const vs = el('div', 'dvs');
+    const side = (list, cls) => { const d = el('div', 'dside ' + cls); list.forEach((x) => { const a = el('div', 'dav'); a.style.setProperty('--c', x.col); a.append(el('i', '', x.av), el('b', '', x.name)); d.append(a); }); return d; };
+    vs.append(side([D.me, ...D.mates], won ? 'w' : 'l'), el('span', 'dvsx', 'VS'), side(D.foes, won ? 'l' : 'w'));
+    const h = el('h2', 'rtitle', res.won === null ? 'НИЧЬЯ' : won ? 'ПОБЕДА!' : 'ПОРАЖЕНИЕ');
+    const sub = el('div', 'rsub', res.why === 'left' ? 'Соперник вышел из боя' : res.won === null ? 'Время вышло, силы равны' : won ? 'Ты вдавил соперника в стену. +25 XP за победу' : 'Соперник оказался быстрее. Карточки, где ошибся, вернутся раньше');
+    r.append(vs, h, sub);
+    const stats = el('div', 'rstats');
+    [['+' + g.xp, 'XP' + (up ? ` · ур. ${lvl}` : '')], ['×' + g.bestCombo, 'комбо'], [g.right + '/' + (g.right + g.wrong), 'верно']]
+      .forEach(([v, l]) => { const s = el('div', 'rs'); s.append(el('b', '', String(v)), el('span', '', l)); stats.append(s); });
+    r.append(stats);
+    const b = el('button', 'primary', 'Реванш'); b.onclick = () => { closeGame(); Duel.rematch(); };
+    const q = el('button', 'ghost', 'Выйти из комнаты'); q.onclick = () => { closeGame(); Duel.leave(); };
+    r.append(b, q);
   }
 
   /* ---------- выбор босса ---------- */
@@ -677,7 +758,8 @@
     const go = el('button', 'primary fightbtn', x.beaten ? 'Ещё бой' : 'В бой');
     go.onclick = () => fight(x.sec);
     const all = el('button', 'linkbtn', 'Все боссы →'); all.onclick = openHub;
-    t.append(go, all);
+    const dl = el('button', 'linkbtn', 'Дуэль с другом ⚔'); dl.onclick = () => window.Duel && Duel.open();
+    t.append(go, all, dl);
     home.append(im, t);
   }
   window.addEventListener('resize', () => { if (F) { fitCanvas(); place(); } });
@@ -699,6 +781,6 @@
     return out;
   }
 
-  window.Arena = { options, start, stop, onPick, onGrade, useShield, boost, beforeFinish, result, renderHome, openHub, fight, renderMods: () => F && renderMods(), _f: () => F };
+  window.Arena = { duelMsg, duelFinish, options, start, stop, onPick, onGrade, useShield, boost, beforeFinish, result, renderHome, openHub, fight, renderMods: () => F && renderMods(), _f: () => F };
   renderHome();
 })();

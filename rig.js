@@ -16,6 +16,7 @@ window.Rig = (() => {
     if (TINT > 0) r = mixc(r, TC, TINT);
     return `rgb(${r[0] | 0},${r[1] | 0},${r[2] | 0})`;
   };
+  const shade = (h, k) => '#' + mixc(hex(h), [6, 8, 16], k).map((v) => (v | 0).toString(16).padStart(2, '0')).join('');
   const RGBA = (h, a) => { const r = hex(h); return `rgba(${r[0]},${r[1]},${r[2]},${clamp(a, 0, 1)})`; };
 
   /* ---------- примитивы ---------- */
@@ -93,7 +94,7 @@ window.Rig = (() => {
   function hornPath() { cx.beginPath(); cx.moveTo(-6, -20); cx.quadraticCurveTo(21, -62, 68, -48); cx.quadraticCurveTo(32, -42, 8, -12); cx.closePath(); }
   function drawBull(P, S) {
     const t = P.t, pr = P.p, { tf, N, ha, PIV, dip, lean } = S, sc = P.scars;
-    const BLUE = '#2f7dff', DARK = '#262d40', STEEL = '#58627a';
+    const BLUE = P.col || '#2f7dff', DARK = '#262d40', STEEL = '#58627a', BDK = shade(BLUE, .33), BSC = shade(BLUE, .2);
     cx.save(); cx.translate(P.bx, 0);
     shadow(10, 86);
     if (P.koM) { cx.translate(-50, 0); cx.rotate(-rad(P.koM * 14)); cx.translate(50, 0); }
@@ -102,7 +103,7 @@ window.Rig = (() => {
     const jig = (i) => pr < -.1 ? Math.sin(t * 30 + i * 2.1) * 2 * -pr : 0;
     const legs = [[-50, -74, -52, 1, 1], [30, -70, 40, -1, 1], [-36, -72, -34, 1, 0], [44, -68, 58, -1, 0]];
     const leg = (L, i) => {
-      const [hx, hy, fx, dir, far] = L, h = tf(hx, hy), [kn, ft] = ik(h, [fx + jig(i), 0], 34, 36, dir), c = far ? '#1f52bf' : BLUE;
+      const [hx, hy, fx, dir, far] = L, h = tf(hx, hy), [kn, ft] = ik(h, [fx + jig(i), 0], 34, 36, dir), c = far ? BDK : BLUE;
       limb(h, kn, far ? 18 : 22, c); limb(kn, ft, far ? 13 : 15, far ? '#3e475d' : STEEL);
       const pa = [h[0] + (kn[0] - h[0]) * .3 + 6 * dir, h[1] + (kn[1] - h[1]) * .3], pb = [kn[0] + (ft[0] - kn[0]) * .45 + 5 * dir, kn[1] + (ft[1] - kn[1]) * .45];
       cx.lineCap = 'round'; cx.strokeStyle = OUT; cx.lineWidth = 6; line(pa, pb); cx.stroke(); cx.strokeStyle = C('#cfd6e4'); cx.lineWidth = 2.5; line(pa, pb); cx.stroke();
@@ -137,7 +138,7 @@ window.Rig = (() => {
       if (Math.sin(t * 12) > 0) lamp(-24, -128, 3.5, '#ff2a20');
     }
     // плечо + турбина
-    disc(34, -104, 30, sc >= 2 ? '#2264d0' : BLUE);
+    disc(34, -104, 30, sc >= 2 ? BSC : BLUE);
     disc(34, -104, 19, '#1a2236');
     cx.save(); cx.translate(34, -104); cx.rotate(t * (4 + 14 * Math.abs(pr) + 10 * P.kickM));
     for (let i = 0; i < 6; i++) { cx.rotate(Math.PI / 3); cx.beginPath(); cx.moveTo(3, 0); cx.quadraticCurveTo(10, -6, 16, -2); cx.lineTo(15, 2); cx.closePath(); cx.fillStyle = C('#9fe2ff'); cx.fill(); }
@@ -450,7 +451,12 @@ window.Rig = (() => {
     }
   };
 
-  const BOSS = { golem, dragon, scorpion, serpent };
+  /* соперник-бык: тот же бык, отражённый зеркально; цвет и повреждения свои */
+  const rival = {
+    sx: 0, D: () => 0, w: 190,
+    draw(P) { return null; }
+  };
+  const BOSS = { golem, dragon, scorpion, serpent, rival };
 
   /* P: { t, p, kickM, kickB, flashM, flashB, koM, koB, scars, shield, blockT, charge, turbo, raged, stun, hpFrac, introM, introB, key } */
   function draw(ctx, P) {
@@ -464,7 +470,16 @@ window.Rig = (() => {
     if (P.introB > 1) { gw.gN = [gx + 40 + P.introB, -128]; gw.gF = [gx + 50 + P.introB, -122]; }
     if (P.hide !== 'bull') drawBull(P, S);
     const Q = Object.assign({}, P, { bx: bossBx });
-    const an = P.hide === 'boss' ? { body: [bossBx, -110], head: [bossBx, -170], mouth: [bossBx, -170] } : B.draw(Q, gw);
+    let an;
+    if (P.key === 'rival') {
+      const P2 = Object.assign({}, P, { p: -P.p, kickM: P.kickB, flashM: P.flashB, koM: P.koB, scars: P.rscars || 0, col: P.rcol, shield: 0, blockT: 0, charge: 0, t: P.t + 1.7, hide: null });
+      const S2 = bullPose(P2), gx2 = VW / 2 + P2.p * 30;
+      P2.bx = gx2 - S2.gN[0] + P.introB - jit;
+      if (P.hide !== 'boss') { cx.save(); cx.translate(VW, 0); cx.scale(-1, 1); FLIP = true; drawBull(P2, S2); FLIP = false; cx.restore(); }
+      an = { body: [VW - (P2.bx + 6), -96], head: [VW - (P2.bx + 40), -110], mouth: [VW - (P2.bx + 50), -90] };
+      return { contact: [gw.gN[0], gw.gN[1]], bull: [P.bx + 6, -96], bullRear: [P.bx - 50, -40], bullFront: [P.bx + 50, -40], boss: an.body, bossHead: an.head, mouth: an.mouth, bossRear: [VW - (P2.bx - 50), -40] };
+    }
+    an = P.hide === 'boss' ? { body: [bossBx, -110], head: [bossBx, -170], mouth: [bossBx, -170] } : B.draw(Q, gw);
     return { contact: [gw.gN[0], gw.gN[1]], bull: [P.bx + 6, -96], bullRear: [P.bx - 50, -40], bullFront: [P.bx + 50, -40], boss: an.body, bossHead: an.head, mouth: an.mouth, bossRear: [bossBx + B.w, -40] };
   }
   return { draw, VW };
