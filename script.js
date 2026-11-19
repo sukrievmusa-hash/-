@@ -551,7 +551,7 @@ function pickOpt(btn, right) {
   if (G.arena) Arena.onPick(right);
   if (right && G.arena) { // на арене без лишних кнопок: быстрый верный ответ = «Легко» (крит), обычный = «Помню»
     const fast = Date.now() - G.t0 < 6000 + 35 * c.q.length;
-    setTimeout(() => applyGrade(fast ? 3 : 2), 450); return;
+    setTimeout(() => { if (G && G.q[G.i] === c && !G.done) applyGrade(fast ? 3 : 2); }, 450); return;
   }
   if (right) { showGrades(c, true); return; } // верно — остаётся оценить, насколько легко
   btn.classList.add('wrong');

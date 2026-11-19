@@ -428,3 +428,38 @@ button.primary,button.ghost,button.danger,.filebtn{border-radius:8px}
 #game.arena .flash.kofade{opacity:.25;transition:opacity .4s}
 #game.arena .opt{font-size:15px;line-height:1.35;padding:11px 12px}
 #game.arena .opts{margin-bottom:6px}
+
+/* ===== схватка лоб в лоб ===== */
+#game.arena .fighter.me,#game.arena .fighter.boss{right:auto;left:0;bottom:6%}
+#game.arena .fighter.boss.serpent{bottom:10%}
+#game.arena .fighter.me img{transform-origin:70% 100%;animation:strainM .28s ease-in-out infinite alternate}
+#game.arena .fighter.boss img{transform-origin:30% 100%;animation:strainB .31s ease-in-out infinite alternate}
+@keyframes strainM{from{transform:rotate(3deg) translateX(0)}to{transform:rotate(4.5deg) translateX(3px) translateY(1px)}}
+@keyframes strainB{from{transform:rotate(-3deg) translateX(0)}to{transform:rotate(-4.5deg) translateX(-3px) translateY(1px)}}
+#game.arena .fighter.boss.rage img{animation:strainB .2s ease-in-out infinite alternate,rage .5s ease-in-out infinite alternate}
+#game.arena .fighter.me.danger img{animation:strainM .14s ease-in-out infinite alternate,dangerM .5s steps(2) infinite}
+@keyframes dangerM{50%{filter:drop-shadow(0 0 12px rgba(255,40,40,.95)) brightness(.85) sepia(.3)}}
+#game.arena .fighter.me.d1 img{filter:drop-shadow(0 0 10px rgba(70,150,255,.4)) saturate(.8) brightness(.92) contrast(1.1)}
+#game.arena .fighter.me.d2 img{filter:drop-shadow(0 0 10px rgba(255,80,40,.5)) saturate(.6) brightness(.82) contrast(1.2) sepia(.15)}
+#game.arena .fighter.me.shove{animation:shoveM .5s cubic-bezier(.3,0,.2,1)}
+@keyframes shoveM{0%{transform:none}25%{transform:translateX(-7%) scaleX(.94)}50%{transform:translateX(8%) scaleX(1.06) rotate(2deg)}100%{transform:none}}
+#game.arena .fighter.me.shove.turbo img{filter:drop-shadow(0 0 14px #ff8a1e) drop-shadow(0 0 30px rgba(255,90,20,.8))}
+#game.arena .fighter.boss.pushed{animation:pushedB .5s ease-out}
+@keyframes pushedB{0%{transform:none}45%{transform:translateX(7%) rotate(5deg)}100%{transform:none}}
+#game.arena .fighter.boss.pushed img{filter:brightness(2.4) saturate(.3)!important}
+#game.arena .fighter.boss.slam{animation:slamB .5s cubic-bezier(.3,0,.2,1)}
+@keyframes slamB{0%{transform:none}30%{transform:translateX(6%) scale(1.03)}55%{transform:translateX(-9%) scale(1.07) rotate(-3deg)}100%{transform:none}}
+#game.arena .fighter.boss.ko{animation:bkoPush 1.4s forwards}
+@keyframes bkoPush{0%{transform:none}30%{transform:translateY(-6%) rotate(10deg)}100%{transform:translate(20%,22%) rotate(28deg);opacity:.3;filter:grayscale(1) brightness(.5)}}
+.wall{position:absolute;top:30%;bottom:3%;width:12px;z-index:4;--hot:0;
+  background:repeating-linear-gradient(45deg,#e8a800 0 7px,#1d212b 7px 14px);border:2px solid #0d1017;
+  box-shadow:0 0 calc(4px + 26px * var(--hot)) rgba(255,50,30,calc(var(--hot)));filter:brightness(calc(.75 + .5 * var(--hot)))}
+.wall.l{left:0;border-radius:0 4px 4px 0}.wall.r{right:0;border-radius:4px 0 0 4px}
+.wall.smash{animation:wsmash .6s}
+@keyframes wsmash{20%{transform:scaleX(1.8);filter:brightness(2)}}
+.tug{position:absolute;left:14%;right:14%;bottom:4px;height:6px;z-index:8;border-radius:4px;background:linear-gradient(90deg,#ff3b30,#3a4258 35%,#3a4258 65%,#2f7dff);opacity:.9}
+.tug .mid{position:absolute;left:50%;top:-3px;bottom:-3px;width:2px;background:#fff;opacity:.5}
+.tug b{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;transform:translate(-50%,-50%);background:#ffd24a;box-shadow:0 0 10px #ffb02e;border:2px solid #3a1800}
+.warn{position:absolute;left:0;right:0;top:22%;z-index:8;text-align:center;font:900 italic 20px/1 system-ui;color:#ff5a4a;-webkit-text-stroke:1px #3a0000;text-shadow:0 2px 0 #3a0000,0 0 16px rgba(255,40,30,.9);opacity:0;pointer-events:none}
+.warn.on{animation:warnb .55s steps(2) infinite}
+@keyframes warnb{0%{opacity:1}50%{opacity:.25}}
