@@ -721,9 +721,9 @@
 
   /* ---------- выбор босса ---------- */
   const SESSION = 99;
-  const secs = () => Object.keys(window.BUILTIN_SECTIONS || {}).map(Number).filter((k) => BOSSES[k]).concat(S.cards.length ? [SESSION] : []);
-  const scopeOf = (sec) => sec === SESSION ? ALL : { t: 'sec', id: sec };
-  const secLabel = (sec) => sec === SESSION ? 'Все разделы: большой бой перед сессией' : `Раздел ${sec}. ${SEC_NAMES[sec]}`;
+  const secs = () => Object.keys(window.BUILTIN_SECTIONS || {}).map(Number).filter((k) => BOSSES[k] && k !== SESSION).concat(S.cards.some((c) => sectionOf(c) === SESSION) ? [SESSION] : []);
+  const scopeOf = (sec) => ({ t: 'sec', id: sec });
+  const secLabel = (sec) => sec === SESSION ? '300 вопросов сессии, все разделы' : `Раздел ${sec}. ${SEC_NAMES[sec]}`;
   function bossInfo(sec) {
     const sc = scopeOf(sec), due = dueCards(sc).length, fresh = extraNewCards(sc).length, st = scopeStats(sc);
     return { sec, B: bossOf(sec), due, fresh, st, beaten: A.beat[sec] === today(), mode: due ? 'rev' : fresh ? 'new' : 'prac' };
@@ -740,10 +740,11 @@
   function sessionQueue(n) {
     const now = Date.now();
     const mix = (arr) => { const g = {}; arr.forEach((c) => (g[c.lecture] = g[c.lecture] || []).push(c)); const L = shuffle(Object.values(g)), out = []; for (let i = 0; out.length < arr.length; i++) L.forEach((l) => { if (l[i]) out.push(l[i]); }); return out; };
-    const rev = mix(S.cards.filter((c) => c.seen && c.due <= now).sort((a, b) => a.due - b.due));
-    const fresh = mix(S.cards.filter((c) => !c.seen));
+    const mine = S.cards.filter((c) => sectionOf(c) === SESSION);
+    const rev = mix(mine.filter((c) => c.seen && c.due <= now).sort((a, b) => a.due - b.due));
+    const fresh = mix(mine.filter((c) => !c.seen));
     if (rev.length || fresh.length) return [rev.concat(fresh).slice(0, n), rev.length ? 'rev' : 'new'];
-    return [mix(shuffle(S.cards)).slice(0, n), 'prac'];
+    return [mix(shuffle(mine)).slice(0, n), 'prac'];
   }
   function fight(sec) {
     const sc = scopeOf(sec);
@@ -809,7 +810,9 @@
   /* 4 варианта ответа: готовые из checks.js, недостающие — ответы похожих карточек той же лекции/раздела */
   const norm = (t) => String(t).replace(/\s+/g, ' ').trim().toLowerCase();
   function options(c) {
-    const ch = checkOf(c), right = ch ? ch[0] : c.a, out = ch ? ch.slice(0, 4) : [right];
+    const ch = checkOf(c), right = ch ? ch[0] : c.a;
+    if (ch && sectionOf(c) === SESSION) return ch.slice(); // вопросы сессии: все 5 вариантов, как в билете
+    const out = ch ? ch.slice(0, 4) : [right];
     if (out.length >= 4) return out;
     const used = new Set(out.map(norm)), L = right.length, math = /\$/.test(right);
     const take = (list) => list

@@ -522,3 +522,6 @@ button.primary,button.ghost,button.danger,.filebtn{border-radius:8px}
 .dl-fig button img{width:100%;max-width:54px;height:40px;object-fit:contain}
 .dl-fig button.on{border-color:#ffd24a;background:rgba(255,210,74,.14)}
 .dl-pl .fi{width:34px;height:26px;object-fit:contain}
+
+.fimg{display:inline-block;max-width:100%;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}
+.opt .fimg,#gQ .fimg,#gA .fimg{margin:0 .05em}

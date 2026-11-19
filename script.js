@@ -75,7 +75,7 @@ const ALL = { t: 'all' };
 const inScope = (c, sc) => (!sc || sc.t === 'all') ? true : sc.t === 'sec' ? sectionOf(c) === sc.id : c.lecture === sc.id;
 function scopeTitle(sc) {
   if (!sc || sc.t === 'all') return 'Все темы';
-  if (sc.t === 'sec') return `Раздел ${sc.id}. ${SEC_NAMES[sc.id]}`;
+  if (sc.t === 'sec') return secLabel(sc.id);
   return (LECS.find((l) => l.id === sc.id) || {}).title || '';
 }
 function dueCards(sc = ALL) {
@@ -129,7 +129,20 @@ function renderMath(el) {
     } catch (e) {}
   }
 }
-function setText(el, text) { el.textContent = text; renderMath(el); }
+/* текст карточки: формулы-картинки [[f:номер,ширина,высота,сдвиг]] (Сессия 1) и KaTeX */
+function setText(el, text) {
+  el.textContent = '';
+  String(text).split(/\[\[f:([^\]]+)\]\]/).forEach((part, i) => {
+    if (i % 2 === 0) { if (part) el.append(part); return; }
+    const [n, w, h, v] = part.split(','), im = document.createElement('span'); // формула как маска: цвет берётся от текста (светлая и тёмная тема)
+    im.className = 'fimg'; const u = `url(ses1/f/${n}.svg)`; im.style.webkitMaskImage = u; im.style.maskImage = u;
+    const k = 1.25; // формулы чуть крупнее текста: так их легче читать на телефоне
+    im.style.width = w * k + 'em'; im.style.height = h * k + 'em'; im.style.verticalAlign = v * k + 'em';
+    el.append(im);
+  });
+  renderMath(el);
+}
+const secLabel = (k) => +k === 99 ? SEC_NAMES[k] : `Раздел ${k}. ${SEC_NAMES[k]}`;
 
 /* ---------- вкладки ---------- */
 $$('.tabs button').forEach((b) => b.addEventListener('click', () => {
@@ -285,7 +298,7 @@ function renderTopics() {
     const wrap = document.createElement('div'); wrap.className = 'sec' + (openSec === k ? ' open' : '');
     const head = document.createElement('button'); head.className = 'sechead';
     const ar = document.createElement('span'); ar.className = 'arrow'; ar.textContent = '▸';
-    const nm = document.createElement('span'); nm.className = 'name'; nm.textContent = `Раздел ${k}. ${SEC_NAMES[k]}`;
+    const nm = document.createElement('span'); nm.className = 'name'; nm.textContent = secLabel(k);
     head.append(ar, nm, pill(scopeStats(sc)));
     head.onclick = () => { openSec = openSec === k ? -1 : k; renderTopics(); };
     const body = document.createElement('div'); body.className = 'lecs';
@@ -411,7 +424,7 @@ function renderProgress() {
   const lv = $('#lvList'); lv.innerHTML = '';
   secs.forEach((k) => {
     const st = scopeStats({ t: 'sec', id: k });
-    lv.append(prow(`Раздел ${k}. ${SEC_NAMES[k]}`, levelName(st.level), Math.round(st.level * 100) + '%', st.level, levelColor(st.level)));
+    lv.append(prow(secLabel(k), levelName(st.level), Math.round(st.level * 100) + '%', st.level, levelColor(st.level)));
     LECS.filter((l) => l.section === k).forEach((l) => {
       const ls = scopeStats({ t: 'lec', id: l.id }), r = prow(lecLabel(l.title), lecTopic(l.title), Math.round(ls.level * 100) + '%', ls.level, levelColor(ls.level));
       r.classList.add('sub'); lv.append(r);
@@ -431,14 +444,14 @@ function renderProgress() {
     n.textContent = `Слабее всего: ${lecLabel(w.l.title)} — ${w.st.bad} ошибок из ${w.st.answers} ответов`; errBox.append(n);
   }
   if (secRows.length) { const h = document.createElement('div'); h.className = 'subh'; h.textContent = 'По разделам'; errBox.append(h);
-    secRows.forEach((x) => errBox.append(errRow(`Раздел ${x.k}`, SEC_NAMES[x.k], x.st))); }
+    secRows.forEach((x) => errBox.append(errRow(+x.k === 99 ? 'Сессия 1' : `Раздел ${x.k}`, SEC_NAMES[x.k], x.st))); }
   if (lecRows.length) { const h = document.createElement('div'); h.className = 'subh'; h.textContent = 'По лекциям'; errBox.append(h);
     lecRows.forEach((x) => errBox.append(errRow(lecLabel(x.l.title), `${lecTopic(x.l.title)} · ${x.st.bad} из ${x.st.answers}`, x.st))); }
   const hb = $('#hardList'); hb.innerHTML = '';
   hard.forEach((c) => {
     const d = document.createElement('div'); d.className = 'item';
     const t = document.createElement('div'); t.className = 't';
-    const q = document.createElement('div'); q.textContent = c.q;
+    const q = document.createElement('div'); setText(q, c.q);
     const m = document.createElement('div'); m.className = 'badge'; m.textContent = `${lectureName(c.lecture)} · ошибок ${c.bad} из ${(c.ok || 0) + c.bad}`;
     t.append(q, m); d.append(t); hb.append(d); renderMath(q);
   });
@@ -454,7 +467,7 @@ function renderCards() {
   list.forEach((c) => {
     const row = document.createElement('div'); row.className = 'item';
     const t = document.createElement('div'); t.className = 't';
-    const qq = document.createElement('div'); qq.textContent = c.q;
+    const qq = document.createElement('div'); setText(qq, c.q);
     const bd = document.createElement('div'); bd.className = 'badge';
     const d = !c.seen ? 'новая' : c.due <= Date.now() ? 'пора повторить' : 'через ' + Math.ceil((c.due - Date.now()) / DAY) + ' дн';
     bd.textContent = `${lectureName(c.lecture)} · ${d}`;

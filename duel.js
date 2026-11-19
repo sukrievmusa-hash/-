@@ -78,8 +78,8 @@
   const every = (ms, f) => { const t = setInterval(f, ms); timers.push(t); return t; };
   const clearTimers = () => { timers.forEach(clearInterval); timers = []; };
   const send = (o) => net && net.send(Object.assign({ id: myId }, o));
-  const secs = () => Object.keys(window.BUILTIN_SECTIONS || {}).map(Number).concat([99]);
-  const secTitle = (k) => k === 99 ? 'Сессия 1. Математика (все разделы)' : `Раздел ${k}. ${SEC_NAMES[k]}`;
+  const secs = () => Object.keys(window.BUILTIN_SECTIONS || {}).map(Number);
+  const secTitle = (k) => k === 99 ? 'Сессия 1. Математика (300 вопросов)' : `Раздел ${k}. ${SEC_NAMES[k]}`;
 
   function connect(code, host) {
     leaveNet(); room = code; isHost = host; list = []; peers = {}; teamOf = {}; hostSeen = host ? Date.now() : 0; note = '';
@@ -122,11 +122,11 @@
     const meE = l.find((x) => x.id === myId); if (!meE) return;
     const mates = l.filter((x) => x.team === meE.team && x.id !== myId), foes = l.filter((x) => x.team !== meE.team);
     if (!foes.length) return;
-    sec = s; const sc = s === 99 ? { t: 'all' } : { t: 'sec', id: s };
+    sec = s; const sc = { t: 'sec', id: s };
     let pool = [...dueCards(sc), ...extraNewCards(sc)];
     if (pool.length < 25) pool = pool.concat(practiceCards(sc));
     const seen = new Set(); pool = pool.filter((c) => !seen.has(c.id) && seen.add(c.id));
-    if (!pool.length) pool = S.cards.filter((c) => s === 99 || sectionOf(c) === s);
+    if (!pool.length) pool = S.cards.filter((c) => sectionOf(c) === s);
     if (!pool.length) { note = 'В этом разделе нет карточек'; return; }
     let q = shuffle(pool).slice(0, 60); while (q.length < 40) q = q.concat(shuffle(pool));
     const fac = 2 / (mates.length + 2);
