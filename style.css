@@ -218,3 +218,211 @@ button.primary,button.ghost,button.danger,.filebtn{border-radius:8px}
 .taskrow .t b{display:block}
 .taskrow .t span{display:block;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
 .taskpanel{border-color:var(--accent)}
+
+/* ================= АРЕНА БОССОВ ================= */
+#game.arena,.ahub{--bg:#0b0e16;--panel:#151a26;--line:#283048;--text:#eef1f8;--muted:#98a2ba;--accent:#3d7bff;
+  background:radial-gradient(120% 60% at 50% 0%,#1a2340 0%,#0b0e16 60%);color:var(--text)}
+#game.arena .gtop .bar,#game.arena #gHearts,#game.arena #gCombo{display:none}
+#game.arena .gamebox{padding:10px 12px 18px}
+#game.arena .gmeta{margin:6px 2px 0;font-size:12px}
+#game.arena .flash{min-height:0;padding:16px;gap:12px;margin:6px 0 10px;background:linear-gradient(180deg,rgba(30,38,58,.92),rgba(18,23,35,.95));border:1px solid #2f3a58;box-shadow:0 0 0 1px rgba(80,130,255,.08),0 10px 30px rgba(0,0,0,.4)}
+#game.arena .q{font-size:19px}
+#game.arena .a{font-size:17px}
+#game.arena .opt{background:#1a2132;border-color:#2f3a58;transition:transform .12s,opacity .3s}
+#game.arena .opt:active{transform:scale(.97)}
+#game.arena .opt.grabbed{opacity:.15;transform:scale(.92);text-decoration:line-through}
+#game.arena .grades button{box-shadow:0 4px 0 rgba(0,0,0,.35);transition:transform .08s}
+#game.arena .grades button:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.35)}
+#game.arena .gamebox>.primary{background:linear-gradient(180deg,#4d8bff,#2d5fd6);box-shadow:0 4px 0 #1d3f94}
+
+/* HUD */
+.ahud{display:flex;align-items:center;gap:8px;margin:2px 0 6px}
+.aside{flex:1;min-width:0}
+.aside.bs{text-align:right}
+.aname{font-size:11px;font-weight:800;letter-spacing:.08em;color:#c9d3ec;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hp{position:relative;height:14px;border-radius:4px;background:#0a0d14;border:2px solid #39425c;overflow:hidden;transform:skewX(-12deg)}
+.hp i{position:absolute;top:0;bottom:0;left:0;width:100%;transition:width .35s ease-out}
+.hp .lag{background:#fff3b0;transition:width .7s ease-in .1s}
+.hp .fill{background:linear-gradient(180deg,#7cc4ff,#2f7dff 60%,#1d56c9)}
+.hp.boss{transform:skewX(12deg)}
+.hp.boss i{left:auto;right:0}
+.hp.boss .fill{background:linear-gradient(180deg,#ff8a7a,#ff3b30 60%,#b3170f)}
+.avs{font:900 italic 20px/1 system-ui;color:#ffd24a;text-shadow:0 0 10px rgba(255,170,40,.7),2px 2px 0 #7a3d00}
+
+/* сцена */
+.stage{position:relative;height:clamp(210px,38vh,330px);border-radius:16px;overflow:hidden;isolation:isolate;
+  background:radial-gradient(60% 70% at 22% 0%,rgba(70,130,255,.35),transparent 70%),radial-gradient(60% 70% at 78% 0%,rgba(255,80,50,.32),transparent 70%),linear-gradient(#1b2438 0%,#101624 58%,#0c1018 100%);
+  border:1px solid #2a3350;box-shadow:inset 0 0 60px rgba(0,0,0,.6)}
+.crowd{position:absolute;left:0;right:0;top:30%;height:26%;opacity:.75;
+  background:radial-gradient(circle at 50% 35%,#070a10 0 7px,transparent 8px) 0 0/22px 30px repeat-x,radial-gradient(circle at 50% 35%,#0a0e16 0 8px,transparent 9px) 11px 12px/24px 34px repeat-x,linear-gradient(transparent 40%,#070a10 40%);
+  animation:crowd 1.6s ease-in-out infinite alternate}
+@keyframes crowd{to{transform:translateY(-2px)}}
+.truss{position:absolute;top:0;bottom:40%;width:14px;opacity:.55;background:repeating-linear-gradient(45deg,transparent 0 6px,#3a4560 6px 8px),linear-gradient(90deg,#3a4560 0 2px,transparent 2px 12px,#3a4560 12px)}
+.t1{left:9%}.t2{right:9%}
+.beam{position:absolute;top:-10%;width:40%;height:90%;filter:blur(6px);opacity:.5;mix-blend-mode:screen;transform-origin:50% 0}
+.b1{left:5%;background:linear-gradient(180deg,rgba(110,170,255,.55),transparent);clip-path:polygon(40% 0,60% 0,100% 100%,0 100%);animation:sweep 5s ease-in-out infinite alternate}
+.b2{right:5%;background:linear-gradient(180deg,rgba(255,120,80,.5),transparent);clip-path:polygon(40% 0,60% 0,100% 100%,0 100%);animation:sweep 6s ease-in-out infinite alternate-reverse}
+@keyframes sweep{from{transform:rotate(-14deg)}to{transform:rotate(14deg)}}
+.floor{position:absolute;left:-40%;right:-40%;bottom:0;height:38%;transform:perspective(260px) rotateX(52deg);transform-origin:50% 100%;
+  background:repeating-linear-gradient(90deg,rgba(140,170,255,.10) 0 2px,transparent 2px 56px),repeating-linear-gradient(0deg,rgba(140,170,255,.08) 0 2px,transparent 2px 28px),linear-gradient(#273047,#141a26)}
+#aFx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:6}
+.vign{position:absolute;inset:0;pointer-events:none;z-index:7;opacity:0}
+.vign.red{animation:vred .65s}
+.vign.white{animation:vwhite .3s}
+@keyframes vred{0%{opacity:1;box-shadow:inset 0 0 46px 6px rgba(255,30,30,.75)}100%{opacity:0;box-shadow:inset 0 0 46px 6px rgba(255,30,30,.75)}}
+@keyframes vwhite{0%{opacity:.85;background:#fff}100%{opacity:0;background:#fff}}
+.asound{position:absolute;right:6px;top:6px;z-index:9;background:rgba(0,0,0,.35);border:0;border-radius:8px;font-size:14px;padding:3px 6px}
+
+/* бойцы */
+.fighter{position:absolute;bottom:5%;z-index:3;will-change:transform}
+.fighter img{display:block;width:100%;height:auto;pointer-events:none}
+.fighter .shadow{position:absolute;left:12%;right:12%;bottom:-2%;height:12%;border-radius:50%;background:radial-gradient(rgba(0,0,0,.65),transparent 70%)}
+.fighter.me{left:1%;width:44%;transform-origin:50% 100%}
+.fighter.me img{filter:drop-shadow(0 0 10px rgba(70,150,255,.55));animation:breathe 1.8s ease-in-out infinite}
+.fighter.boss{right:1%;width:calc(47% * var(--sc,1));transform-origin:50% 100%}
+.fighter.boss img{filter:drop-shadow(0 0 12px var(--glow));animation:breathe 2.2s ease-in-out infinite .3s}
+.fighter.boss.golem{width:40%}
+.fighter.boss.serpent img,.fighter.boss.dragon img{animation:hover 2.6s ease-in-out infinite}
+.fighter.boss.serpent{bottom:12%}
+@keyframes breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.015,.985)}}
+@keyframes hover{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.fighter.boss.rage img{animation:rage .5s ease-in-out infinite alternate}
+@keyframes rage{from{filter:drop-shadow(0 0 10px rgba(255,40,30,.9)) saturate(1.2)}to{filter:drop-shadow(0 0 22px rgba(255,40,30,1)) saturate(1.6) brightness(1.15)}}
+.fighter.me.low img{animation:breathe 1s ease-in-out infinite,lowhp 1s steps(2) infinite}
+@keyframes lowhp{50%{filter:drop-shadow(0 0 10px rgba(255,40,40,.9)) brightness(.85)}}
+
+.fighter.me.enter{animation:enterL .8s cubic-bezier(.2,.8,.3,1.2)}
+.fighter.boss.enterB{animation:enterR .8s cubic-bezier(.2,.8,.3,1.2)}
+@keyframes enterL{from{transform:translateX(-120%)}}
+@keyframes enterR{from{transform:translateX(120%)}}
+.fighter.me.dash{animation:dash .55s cubic-bezier(.3,0,.2,1)}
+@keyframes dash{0%{transform:translateX(0)}15%{transform:translateX(-8%) scaleX(.95)}40%{transform:translateX(62%) scaleX(1.08) skewX(-6deg)}55%{transform:translateX(52%)}100%{transform:translateX(0)}}
+.fighter.me.dash.turbo img{filter:drop-shadow(0 0 14px #ff8a1e) drop-shadow(0 0 30px rgba(255,90,20,.8))}
+.fighter.me.charge img{animation:charge .7s}
+@keyframes charge{0%,100%{filter:drop-shadow(0 0 10px rgba(70,150,255,.55))}40%{filter:drop-shadow(0 0 24px #7cc4ff) brightness(1.35)}}
+.fighter.me.hurt{animation:hurt .6s}
+@keyframes hurt{0%{transform:translateX(0)}20%{transform:translateX(-14%) rotate(-6deg)}40%{transform:translateX(-10%) rotate(-3deg)}100%{transform:translateX(0)}}
+.fighter.me.hurt img{filter:brightness(2) sepia(1) hue-rotate(-50deg) saturate(5)}
+.fighter.me .dome{position:absolute;inset:-6% -2% 0;border-radius:50% 50% 40% 40%;border:2px solid rgba(120,210,255,.9);background:radial-gradient(circle at 50% 40%,rgba(120,210,255,.08),rgba(80,170,255,.32));box-shadow:0 0 24px rgba(90,190,255,.8),inset 0 0 20px rgba(140,220,255,.5);opacity:0;transform:scale(.8);transition:.3s}
+.fighter.me.shielded .dome{opacity:1;transform:scale(1);animation:dome 1.4s ease-in-out infinite}
+.fighter.me.block .dome{opacity:1;transform:scale(1.08);box-shadow:0 0 50px #8fe0ff,inset 0 0 30px #c6f0ff}
+@keyframes dome{50%{box-shadow:0 0 34px rgba(90,190,255,1),inset 0 0 26px rgba(140,220,255,.7)}}
+.fighter.boss.hit{animation:bhit .45s}
+@keyframes bhit{0%{transform:translateX(0)}25%{transform:translateX(9%) rotate(4deg)}60%{transform:translateX(3%)}100%{transform:translateX(0)}}
+.fighter.boss.hit img{filter:brightness(3) saturate(0)!important}
+.fighter.boss.lunge{animation:lunge .55s}
+@keyframes lunge{0%,100%{transform:translateX(0)}30%{transform:translateX(6%) scale(1.04)}55%{transform:translateX(-14%) scale(1.06)}}
+.fighter.boss.ko{animation:bko 1.3s forwards}
+@keyframes bko{0%{transform:none}30%{transform:translateY(-4%) rotate(4deg)}100%{transform:translateY(18%) rotate(14deg);opacity:.35;filter:grayscale(1) brightness(.6)}}
+.fighter.me.ko{animation:mko 1.2s forwards}
+@keyframes mko{to{transform:translateY(10%) rotate(-16deg);opacity:.45;filter:grayscale(1) brightness(.6)}}
+.stage.shake{animation:shake .38s}
+.stage.shake.big{animation:shakeb .6s}
+@keyframes shake{0%,100%{transform:none}20%{transform:translate(-5px,3px)}40%{transform:translate(5px,-3px)}60%{transform:translate(-3px,2px)}80%{transform:translate(2px,-1px)}}
+@keyframes shakeb{0%,100%{transform:none}10%{transform:translate(-10px,6px) rotate(-1deg)}30%{transform:translate(9px,-6px) rotate(1deg)}50%{transform:translate(-7px,4px)}70%{transform:translate(4px,-3px)}90%{transform:translate(-2px,1px)}}
+
+/* снаряды босса */
+.shot{position:absolute;z-index:5;width:34px;height:34px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,#fff 0 18%,var(--c) 40%,transparent 70%);box-shadow:0 0 22px 8px var(--c)}
+.shot.fire{width:46px;height:30px;border-radius:50% 20% 20% 50%;background:radial-gradient(circle at 30% 50%,#fff6c2 0 15%,#ffb02e 35%,#ff4d1e 60%,transparent 72%)}
+.shot.arrow{width:46px;height:14px;border-radius:50% 2px 2px 50%;background:linear-gradient(270deg,transparent,#ffb347 40%,#fff6c2)}
+.shot.arrow{transform-origin:center}
+.shot.rock{width:30px;height:30px;border-radius:30%;background:radial-gradient(circle at 35% 35%,#8e9bb4,#3c475e 70%);box-shadow:0 0 18px 6px rgba(255,150,60,.75)}
+.shot.star{background:radial-gradient(circle,#fff 0 15%,#d6a6ff 35%,#8b3dff 60%,transparent 72%)}
+
+/* тексты на сцене */
+.ftxt{position:absolute;z-index:8;transform:translate(-50%,0);font:900 26px/1 system-ui;color:#fff;-webkit-text-stroke:1.5px #2a1200;text-shadow:0 3px 0 #2a1200,0 0 12px rgba(255,180,40,.8);pointer-events:none;animation:ftxt 1.2s ease-out forwards;white-space:nowrap}
+.ftxt.crit{font-size:36px;color:#ffe066}
+.ftxt.turbo{color:#ffb02e}
+.ftxt.critw{font-size:22px;color:#ff5a2a;font-style:italic}
+.ftxt.hurt{color:#ff6b6b;-webkit-text-stroke-color:#3a0000}
+.ftxt.blk{color:#9fe2ff;-webkit-text-stroke-color:#00253a}
+@keyframes ftxt{0%{transform:translate(-50%,10px) scale(.4);opacity:0}15%{transform:translate(-50%,-6px) scale(1.25);opacity:1}30%{transform:translate(-50%,-10px) scale(1)}100%{transform:translate(-50%,-55px);opacity:0}}
+.abanner{position:absolute;left:0;right:0;top:40%;z-index:9;text-align:center;font:900 italic 38px/1 system-ui;color:#fff;letter-spacing:.02em;
+  -webkit-text-stroke:2px #3a1800;text-shadow:0 4px 0 #3a1800,0 0 24px rgba(255,170,40,.9);opacity:0;pointer-events:none}
+.abanner.on{animation:banner 1.3s cubic-bezier(.2,.9,.3,1.3) forwards}
+.abanner.go{color:#ffd24a}
+.abanner.mod{font-size:26px;color:#9fe2ff;-webkit-text-stroke-color:#00253a;text-shadow:0 3px 0 #00253a,0 0 20px rgba(90,190,255,.9)}
+.abanner.win{font-size:48px;color:#ffe066;animation-duration:1.6s}
+.abanner.lose{color:#ff6b6b;-webkit-text-stroke-color:#3a0000;text-shadow:0 4px 0 #3a0000,0 0 22px rgba(255,40,40,.8)}
+@keyframes banner{0%{transform:scale(3);opacity:0}18%{transform:scale(.92);opacity:1}26%{transform:scale(1.04)}80%{transform:scale(1);opacity:1}100%{transform:scale(1.1);opacity:0}}
+.abanner.win.on,.abanner.lose.on{animation-name:bannerStay}
+@keyframes bannerStay{0%{transform:scale(3);opacity:0}15%{transform:scale(.92);opacity:1}25%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+.acombo{position:absolute;left:8px;top:8px;z-index:9;font:900 italic 18px/1 system-ui;color:#ffd24a;-webkit-text-stroke:1px #3a1800;text-shadow:0 2px 0 #3a1800;opacity:0}
+.acombo.on{opacity:1;animation:combo .35s cubic-bezier(.2,.9,.3,1.5)}
+.acombo.hot{color:#ff7a2a;text-shadow:0 2px 0 #3a1800,0 0 14px rgba(255,90,20,.9)}
+@keyframes combo{from{transform:scale(1.8)}}
+.say{position:absolute;right:6%;top:6%;max-width:62%;z-index:8;background:#fff;color:#1a1a1a;font-weight:700;font-size:13px;line-height:1.3;padding:8px 10px;border-radius:12px;border:2px solid #1a1a1a;
+  opacity:0;transform:scale(.6) translateY(6px);transform-origin:80% 100%;transition:.2s cubic-bezier(.2,.9,.3,1.4);pointer-events:none}
+.say::after{content:'';position:absolute;right:22%;bottom:-9px;border:8px solid transparent;border-top-color:#1a1a1a;border-bottom:0}
+.say.on{opacity:1;transform:none}
+
+/* модули */
+.mods{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.mod{display:flex;align-items:center;gap:6px;background:linear-gradient(180deg,#1e2638,#141a28);border:1px solid #33405e;border-radius:12px;padding:4px 6px 4px 4px;color:var(--text);text-align:left;position:relative;transition:transform .1s}
+.mod img{width:36px;height:36px;flex:none;border-radius:8px;background:#0f1420}
+.mod .mn{font-size:11px;font-weight:700;line-height:1.15;flex:1;min-width:0}
+.mod .cnt{position:absolute;right:5px;top:3px;font-size:11px;color:#ffd24a}
+.mod:disabled{opacity:.38;filter:grayscale(.7)}
+.mod:not(:disabled):active{transform:scale(.95)}
+.mod.on{opacity:1;filter:none;border-color:#7cc4ff;box-shadow:0 0 12px rgba(90,190,255,.7)}
+
+/* итог боя */
+#gResult.aresult{padding:10px 6px 20px}
+.aresult .rart{position:relative;height:190px;display:flex;justify-content:center;align-items:flex-end}
+.aresult .rart img{max-height:190px;max-width:80%;filter:drop-shadow(0 0 20px rgba(255,200,60,.5))}
+.aresult.won .rart img{filter:grayscale(.85) brightness(.7) drop-shadow(0 0 20px rgba(255,200,60,.4));transform:rotate(10deg) translateY(8%)}
+.aresult.won .rart::after{content:'✕';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:900 140px/1 system-ui;color:rgba(255,60,40,.85);text-shadow:0 0 20px rgba(255,40,30,.8);animation:stamp .5s cubic-bezier(.2,.9,.3,1.4) .2s both}
+@keyframes stamp{from{transform:scale(3);opacity:0}}
+.aresult.lost .rart img{filter:grayscale(.6) brightness(.8);transform:rotate(-10deg)}
+.aresult .rtitle{font:900 italic 44px/1.05 system-ui!important;margin:10px 0 4px!important;color:#ffe066;-webkit-text-stroke:2px #3a1800;text-shadow:0 4px 0 #3a1800,0 0 24px rgba(255,170,40,.8)}
+.aresult.lost .rtitle{color:#ff6b6b;-webkit-text-stroke-color:#3a0000;text-shadow:0 4px 0 #3a0000}
+.aresult .rsub{color:var(--muted);font-size:14px;margin-bottom:14px}
+.rstats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:0 0 14px}
+.rs{background:#151b2a;border:1px solid #2a3350;border-radius:12px;padding:8px 2px}
+.rs b{display:block;font-size:18px;color:#fff}
+.rs span{font-size:11px;color:var(--muted)}
+.rloot{background:linear-gradient(180deg,rgba(255,200,60,.12),rgba(255,200,60,.02));border:1px solid rgba(255,200,60,.35);border-radius:14px;padding:10px;margin-bottom:12px}
+.lrow{display:flex;justify-content:center;gap:16px;margin-top:6px}
+.litem{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:700;animation:loot .6s cubic-bezier(.2,.9,.3,1.5) both}
+.litem img{width:64px;height:64px;filter:drop-shadow(0 0 12px rgba(255,200,60,.7))}
+@keyframes loot{from{transform:scale(0) rotate(-30deg);opacity:0}}
+.aresult .primary,.aresult .ghost{display:block;width:100%;margin:8px 0 0}
+.aresult .primary{background:linear-gradient(180deg,#ffb02e,#e2700c);color:#2a1200;font-weight:800;box-shadow:0 4px 0 #8a3f00}
+
+/* выбор босса */
+.ahub{z-index:21}
+.hubbox{max-width:640px;margin:0 auto;padding:14px}
+.hubbox .gtop h2{margin:0;font:900 italic 24px/1 system-ui;color:#ffd24a;-webkit-text-stroke:1px #3a1800;text-shadow:0 3px 0 #3a1800}
+.hubnote{margin:8px 2px 12px}
+.bgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bcard{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px;padding:10px 8px 12px;border-radius:16px;color:var(--text);
+  background:radial-gradient(80% 60% at 50% 30%,var(--glow),transparent 70%),linear-gradient(180deg,#1a2132,#10151f);border:1px solid #2f3a58;overflow:hidden;transition:transform .12s}
+.bcard:active{transform:scale(.97)}
+.bcard img{height:110px;max-width:100%;object-fit:contain;filter:drop-shadow(0 4px 8px rgba(0,0,0,.6));margin-bottom:4px;transition:transform .3s}
+.bcard:hover img{transform:scale(1.06)}
+.bcard b{font-size:15px}
+.bcard .bs{font-size:11px;color:var(--muted);line-height:1.2}
+.bcard .bst{margin-top:6px;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:#273049}
+.bcard .bst.due{background:#c4321f;color:#fff;box-shadow:0 0 12px rgba(255,60,30,.6)}
+.bcard .bw{position:absolute;right:8px;top:6px;font-size:10px;color:#ffd24a}
+.bcard.beaten img{filter:grayscale(.8) brightness(.7)}
+.bcard.beaten .bst{background:#1f5a3e;color:#bff5d8}
+.ahub h3{margin:18px 2px 8px;font-size:14px;color:#c9d3ec;letter-spacing:.05em;text-transform:uppercase}
+.hubmods{display:grid;gap:8px}
+.hmod{display:flex;gap:10px;align-items:center;background:#151b2a;border:1px solid #2a3350;border-radius:12px;padding:6px}
+.hmod img{width:44px;height:44px;border-radius:8px;background:#0f1420}
+.hmod b{display:block;font-size:14px}
+
+/* блок на главной */
+.arenacall{display:flex;align-items:center;gap:10px;position:relative;overflow:hidden;color:#eef1f8;
+  background:radial-gradient(70% 90% at 15% 50%,var(--glow),transparent 70%),linear-gradient(135deg,#1a2238,#0e121c);border-color:#2f3a58}
+.arenacall .hboss{width:42%;max-width:180px;flex:none;filter:drop-shadow(0 0 12px var(--glow));animation:hover 2.6s ease-in-out infinite}
+.arenacall .ht{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.arenacall .hk{font:900 italic 12px/1 system-ui;letter-spacing:.1em;color:#ffd24a}
+.arenacall b{font-size:18px}
+.arenacall span{font-size:12px;color:#a9b3cb}
+.arenacall .fightbtn{margin:8px 0 0;background:linear-gradient(180deg,#ffb02e,#e2700c);color:#2a1200;font-weight:900;font-size:17px;letter-spacing:.04em;box-shadow:0 4px 0 #8a3f00;text-transform:uppercase}
+.arenacall .linkbtn{color:#9fc0ff;align-self:flex-start}
+@media (prefers-reduced-motion:reduce){.stage *{animation-duration:.01s!important}}
+#game.arena .flash.kofade{opacity:.25;transition:opacity .4s}

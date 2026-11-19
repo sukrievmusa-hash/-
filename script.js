@@ -162,6 +162,7 @@ function refresh() {
   $('#playFull').hidden = n <= QUICK;
   $('#playFull').textContent = due ? `Полный раунд · ${Math.min(FULL, due)} ${plural(Math.min(FULL, due))}` : more ? `Выучить ещё ${Math.min(FULL, more)} новых` : 'Практика · 10 карточек';
   renderWeakHome();
+  if (window.Arena) Arena.renderHome();
   renderTg();
   renderTopics();
   renderProgress();
@@ -479,6 +480,7 @@ function launch(q, o) {
   $('.flash').hidden = false;
   $('#gHearts').className = G.diag ? 'dcount' : 'hearts';
   $('.gmeta').hidden = false;
+  if (window.Arena) { if (G.arena) Arena.start(G); else Arena.stop(); }
   nextCard();
 }
 /* раунд «на сегодня»: повторения и новые, потом ещё новые, потом практика */
@@ -513,7 +515,7 @@ function diagExtend() {
 function hearts() { $('#gHearts').textContent = G.diag ? `${Math.min(G.i + 1, G.total)} из ${G.total}` : `Ошибок: ${3 - G.hearts} из 3`; }
 function nextCard() {
   if (G.diag && G.i >= G.q.length) diagExtend();
-  if (G.i >= G.q.length || G.hearts <= 0) return finish();
+  if (G.i >= G.q.length || G.hearts <= 0) { if (G.arena && Arena.beforeFinish(G)) return; return finish(); }
   const c = G.q[G.i];
   hearts();
   $('#gBar').style.width = (Math.min(G.i, G.total) / G.total * 100) + '%';
@@ -529,6 +531,7 @@ function nextCard() {
     setText(b, t); b.onclick = () => pickOpt(b, right); ob.append(b);
   });
   $('.flash').classList.remove('pop'); void $('.flash').offsetWidth; $('.flash').classList.add('pop');
+  if (G.arena) Arena.renderMods();
 }
 function showGrades(c, noForgot) {
   $('#gA').hidden = false; $('#gShow').hidden = true; $('#gGrades').hidden = false;
@@ -544,6 +547,7 @@ $('#gShow').onclick = () => showGrades(G.q[G.i], false);
 function pickOpt(btn, right) {
   const c = G.q[G.i];
   $$('#gOpts .opt').forEach((b) => { b.disabled = true; if (b.dataset.right) b.classList.add('right'); });
+  if (G.arena) Arena.onPick(right);
   if (right) { showGrades(c, true); return; } // верно — остаётся оценить, насколько легко
   btn.classList.add('wrong');
   $('#gA').hidden = false; $('#gExplain').hidden = !LESSONS[c.lecture];
@@ -561,12 +565,16 @@ function applyGrade(g) {
     r.s += [0, 0.5, 1, 1][g]; r.n++;
     if (g === 0 && c.seen) c.due = Math.min(c.due, Date.now()); // забытая карточка вернётся в сегодняшнее повторение
   }
+  let gain = 0, blocked = false;
   if (g === 0) {
-    G.wrong++; G.combo = 0; if (!G.diag) G.hearts--;
-    if (!G.practice && !G.q.slice(G.i + 1).includes(c) && G.hearts > 0) G.q.push(c); // вернётся в конце раунда
+    G.wrong++; G.combo = 0;
+    blocked = !!(G.arena && Arena.useShield()); // энерго-щит на арене спасает сердце
+    if (!G.diag && !blocked) G.hearts--;
+    if ((!G.practice || G.arena) && !G.q.slice(G.i + 1).includes(c) && G.hearts > 0) G.q.push(c); // вернётся в конце раунда (на арене босса надо добить)
   } else {
     G.right++; G.combo++; G.bestCombo = Math.max(G.bestCombo, G.combo);
-    const gain = Math.round((g === 3 ? 15 : g === 2 ? 10 : 6) * (1 + Math.min(G.combo, 10) * 0.1) * (G.practice ? .5 : 1));
+    gain = Math.round((g === 3 ? 15 : g === 2 ? 10 : 6) * (1 + Math.min(G.combo, 10) * 0.1) * (G.practice ? .5 : 1));
+    if (G.arena) gain = Arena.boost(gain); // турбо-ускоритель удваивает
     G.xp += gain;
     const k = dayKey(); S.stats.xpLog[k] = (S.stats.xpLog[k] || 0) + gain; // очки по дням — для рейтинга за неделю
   }
@@ -574,6 +582,7 @@ function applyGrade(g) {
     if (!c.seen) { c.seen = true; const k = dayKey(); S.stats.newLog[k] = (S.stats.newLog[k] || 0) + 1; }
     schedule(c, g); bumpDay();
   }
+  if (G.arena) Arena.onGrade(g, gain, blocked);
   G.i++;
   save(); nextCard();
 }
@@ -606,12 +615,16 @@ function finishDiag(r) {
   r.append(home);
 }
 function finish() {
+  G.done = true;
   S.stats.xp += G.xp;
   const lvl = level(S.stats.xp), up = lvl > G.lvl;
   save();
   $('.flash').hidden = true; $('#gShow').hidden = true; $('#gGrades').hidden = true; $('.gmeta').hidden = true; $('#gExplain').hidden = true; $('#gOpts').hidden = true; $('#gNext').hidden = true;
+  $('.flash').classList.remove('kofade');
   const r = $('#gResult'); r.hidden = false; r.innerHTML = '';
+  r.className = '';
   if (G.diag) { finishDiag(r); G.i = G.q.length; refresh(); tgSync(true); return; }
+  if (G.arena) { Arena.result(r, G, up, lvl); G.i = G.q.length; refresh(); tgSync(true); return; }
   const h = document.createElement('h2');
   h.textContent = G.hearts <= 0 ? 'Раунд закончен: ошибок слишком много, это нормально, попробуйте ещё раз' : 'Раунд пройден';
   const lines = [
@@ -632,8 +645,10 @@ function finish() {
   tgSync(true);
 }
 function closeGame() {
-  if (G && G.i > 0 && G.i < G.q.length && G.hearts > 0) S.stats.xp += G.xp; // досрочный выход сохраняет набранное
-  G = null; $('#game').hidden = true; $('.flash').hidden = false; refresh();
+  if (G && G.i > 0 && !G.done && (G.arena || (G.i < G.q.length && G.hearts > 0))) S.stats.xp += G.xp; // досрочный выход сохраняет набранное
+  G = null; $('#game').hidden = true; $('.flash').hidden = false;
+  if (window.Arena) Arena.stop();
+  refresh();
 }
 $('#gClose').onclick = closeGame;
 $('#playBtn').onclick = () => playToday(QUICK);
