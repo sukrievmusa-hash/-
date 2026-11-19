@@ -52,8 +52,7 @@
       <div class="truss t1"></div><div class="truss t2"></div>
       <div class="crowd"></div><div class="floor"></div>
       <div class="wall l" id="aWallL"></div><div class="wall r" id="aWallR"></div>
-      <div class="fighter me" id="aMe"><div class="shadow"></div><img src="arena/bull.webp" alt=""><div class="dome"></div></div>
-      <div class="fighter boss" id="aBoss"><div class="shadow"></div><img id="aBossImg" alt=""></div>
+      <canvas id="aChars"></canvas>
       <canvas id="aFx"></canvas>
       <div class="tug"><i class="mid"></i><b id="aKnob"></b></div>
       <div class="warn" id="aWarn">ДЕРЖИСЬ! ОТВЕЧАЙ!</div>
@@ -65,7 +64,11 @@
     </div>
     <div class="mods" id="aMods"></div>`;
   box.insertBefore(stageWrap, box.querySelector('.gmeta'));
-  const game = $('#game'), stage = $('#aStage'), me = $('#aMe'), bossEl = $('#aBoss');
+  const game = $('#game'), stage = $('#aStage');
+  // бойцы рисуются на холсте (rig.js); me/bossEl — невидимые «пульты»: классы на них переводятся в состояние анимации
+  const me = el('div'), bossEl = el('div');
+  const chars = $('#aChars'), chx = chars.getContext('2d');
+  let SCL = 1, FLR = 0;
 
   const modsBox = $('#aMods');
   Object.entries(MODS).forEach(([k, m]) => {
@@ -125,7 +128,7 @@
   /* ---------- частицы: искры, дым, огонь, шестерёнки, болты ---------- */
   const cv = $('#aFx'), cx = cv.getContext('2d');
   let parts = [], SW = 0, SH = 0;
-  function fitCanvas() { const r = stage.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1); SW = r.width; SH = r.height; cv.width = SW * d; cv.height = SH * d; cx.setTransform(d, 0, 0, d, 0, 0); }
+  function fitCanvas() { const r = stage.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1); SW = r.width; SH = r.height; cv.width = SW * d; cv.height = SH * d; cx.setTransform(d, 0, 0, d, 0, 0); chars.width = SW * d; chars.height = SH * d; SCL = SW / Rig.VW; FLR = SH * .93; }
   function burst(x, y, opt) {
     const o = Object.assign({ n: 26, colors: ['#fff6c2', '#ffd24a', '#ff8a1e'], speed: 7, life: 34, size: 3, grav: 0.25, kind: 'spark', dir: 0, spread: Math.PI * 2 }, opt);
     for (let i = 0; i < o.n && parts.length < 420; i++) {
@@ -166,10 +169,26 @@
 
   /* ---------- помощники анимаций ---------- */
   const anim = (n, cls, ms) => {
+    if (n === me || n === bossEl) return pulse(n === me, cls);
     const c = cls.split(' '), key = '_t' + c[0];
     n.classList.remove(...c, ...(c[0] === 'shake' || c[0] === 'shove' ? ['big', 'turbo'] : [])); void n.offsetWidth; n.classList.add(...c);
     clearTimeout(n[key]); n[key] = setTimeout(() => n.classList.remove(...c), ms);
   };
+  /* удары и реакции бойцов — импульсы, которые плавно затухают в цикле отрисовки */
+  function pulse(isMe, cls) {
+    if (!F) return;
+    const c = cls.split(' ')[0];
+    if (isMe) {
+      if (c === 'shove') { F.kickM = 1; F.turboT = cls.includes('turbo') ? 1 : 0; }
+      if (c === 'hurt') { F.flashM = 1; F.kickB = Math.max(F.kickB, .6); }
+      if (c === 'block') F.blockT = 1;
+      if (c === 'charge') F.charge = 1;
+    } else {
+      if (c === 'pushed') { F.flashB = 1; F.kickM = Math.max(F.kickM, .8); }
+      if (c === 'slam') F.kickB = 1;
+      if (c === 'hit') { F.flashB = 1; F.stunT = 1; }
+    }
+  }
   function floatText(text, x, y, cls) {
     const d = el('div', 'ftxt ' + (cls || ''), text); d.style.left = x + 'px'; d.style.top = y + 'px';
     stage.append(d); setTimeout(() => d.remove(), 1300);
@@ -187,14 +206,28 @@
   /* ---------- схватка ---------- */
   let F = null;
   const bossOf = (sec) => BOSSES[sec] || BOSSES[1];
-  const contactX = () => SW * (0.5 + F.p * RANGE);
-  const contactY = () => SH * 0.63;
-  const meX = () => contactX() - SW * ME_W * (1 - ME_HEAD);
-  const bossX = () => contactX() - SW * F.B.w * F.B.front;
-  function place() {
-    me.style.left = meX() + 'px';
-    bossEl.style.left = bossX() + 'px';
-    $('#aKnob').style.left = (50 + clamp(F.p, -1, 1) * 50) + '%';
+  const VX = (x) => x * SCL, VY = (y) => FLR + y * SCL;
+  const contactX = () => F.anc ? VX(F.anc.contact[0]) : SW / 2;
+  const contactY = () => F.anc ? VY(F.anc.contact[1]) : SH * .55;
+  const meX = () => (F.anc ? VX(F.anc.bull[0]) : SW * .3) - SW * ME_W * .45;     // левый край быка (для частиц)
+  const bossX = () => (F.anc ? VX(F.anc.boss[0]) : SW * .7) - SW * F.B.w * .5;  // левый край босса
+  function place() { $('#aKnob').style.left = (50 + clamp(F.p, -1, 1) * 50) + '%'; }
+  const easeBack = (x) => { const c = 1.6; x = clamp(x, 0, 1) - 1; return 1 + (c + 1) * x * x * x + c * x * x; };
+  function drawChars(dt) {
+    const dec = (k, r) => { F[k] = (F[k] || 0) * Math.exp(-dt * r); };
+    dec('kickM', 6); dec('kickB', 6); dec('flashM', 7); dec('flashB', 8); dec('blockT', 3); dec('charge', 3); dec('stunT', 1.4);
+    F.intro = Math.min(1, (F.intro || 0) + dt / .65);
+    if (me.classList.contains('ko')) F.koM = Math.min(1, (F.koM || 0) + dt * 1.6);
+    if (bossEl.classList.contains('ko')) F.koB = Math.min(1, (F.koB || 0) + dt * 1.1);
+    const e = easeBack(F.intro), d = Math.min(2, window.devicePixelRatio || 1);
+    chx.setTransform(1, 0, 0, 1, 0, 0); chx.clearRect(0, 0, chars.width, chars.height);
+    chx.setTransform(d * SCL, 0, 0, d * SCL, 0, d * FLR);
+    F.anc = Rig.draw(chx, {
+      key: F.B.key, t: performance.now() / 1000, p: clamp(F.p, -1.05, 1.05),
+      kickM: F.kickM, kickB: F.kickB, flashM: F.flashM, flashB: F.flashB, koM: F.koM || 0, koB: F.koB || 0,
+      scars: F.scars, shield: F.shield ? 1 : 0, blockT: F.blockT, charge: F.charge, turbo: F.boost > 0, raged: F.raged,
+      stun: F.stunT, hpFrac: F.hpLeft / F.hpMax, introM: -(1 - e) * 280, introB: (1 - e) * 280
+    });
   }
   function paused(now) {
     return !G || F.ko || now < F.hold || G.i >= G.q.length || !$('#gNext').hidden || !$('#lesson').hidden || document.hidden;
@@ -211,6 +244,7 @@
     if (!F.ko && F.pt <= -1) wallHit();
     if (!F.ko && F.pt >= 1) bossWall();
     place();
+    drawChars(dt);
     emit(dt, (F.p - prev) / Math.max(dt, 1e-3));
     drawParts();
     raf = requestAnimationFrame(loop);
@@ -225,7 +259,7 @@
       if (speed < -0.05) for (let i = every('dm', 14, dt); i--;) burst(meX() + SW * ME_W * 0.2, SH * 0.92, { n: 1, kind: 'smoke', colors: ['rgba(150,150,160,.35)'], speed: 1.2, life: 40, grav: -0.02, size: 3 });
       if (speed > 0.05) for (let i = every('db', 14, dt); i--;) burst(bossX() + SW * F.B.w * 0.75, SH * 0.92, { n: 1, kind: 'smoke', colors: ['rgba(150,150,160,.35)'], speed: 1.2, life: 40, grav: -0.02, size: 3 });
     }
-    const mx = meX() + SW * ME_W * 0.45, my = SH * 0.5;
+    const mx = F.anc ? VX(F.anc.bull[0]) : SW * .3, my = F.anc ? VY(F.anc.bull[1]) : SH * .5;
     if (danger > 0.05) {
       for (let i = every('ms', 10 * danger, dt); i--;) burst(mx - SW * 0.08, my - SH * 0.12, { n: 1, kind: 'smoke', colors: ['rgba(90,90,100,.55)', 'rgba(60,60,70,.5)'], speed: 1, life: 55, grav: -0.05, size: 4, dir: -Math.PI / 2, spread: 0.8 });
       for (let i = every('mk', 9 * danger, dt); i--;) burst(mx + (Math.random() - 0.5) * SW * 0.18, my + (Math.random() - 0.5) * SH * 0.25, { n: 4, speed: 4, life: 16, size: 2 });
@@ -268,9 +302,7 @@
       p: 0, pt: 0, hold: Date.now() + 2600, scars: 0, koDir: 0 };
     game.classList.add('arena'); stageWrap.hidden = false;
     $('#aBName').textContent = B.name.toUpperCase();
-    $('#aBossImg').src = `arena/${B.key}.webp`;
-    bossEl.style.setProperty('--glow', B.glow); bossEl.style.width = B.w * 100 + '%'; me.style.width = ME_W * 100 + '%';
-    bossEl.className = 'fighter boss ' + B.key; me.className = 'fighter me';
+    bossEl.className = ''; me.className = '';
     $('#aBLag').style.width = '100%'; $('#aPLag').style.width = '100%';
     stage.querySelectorAll('.ftxt').forEach((n) => n.remove());
     parts = []; acc = {};

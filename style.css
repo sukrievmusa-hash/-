@@ -463,3 +463,4 @@ button.primary,button.ghost,button.danger,.filebtn{border-radius:8px}
 .warn{position:absolute;left:0;right:0;top:22%;z-index:8;text-align:center;font:900 italic 20px/1 system-ui;color:#ff5a4a;-webkit-text-stroke:1px #3a0000;text-shadow:0 2px 0 #3a0000,0 0 16px rgba(255,40,30,.9);opacity:0;pointer-events:none}
 .warn.on{animation:warnb .55s steps(2) infinite}
 @keyframes warnb{0%{opacity:1}50%{opacity:.25}}
+#aChars{position:absolute;inset:0;width:100%;height:100%;z-index:3;pointer-events:none}
