@@ -524,7 +524,8 @@ function nextCard() {
   setText($('#gQ'), c.q);
   setText($('#gA'), c.a);
   $('#gA').hidden = true; $('#gGrades').hidden = true; $('#gExplain').hidden = true; $('#gNext').hidden = true;
-  const ch = checkOf(c), ob = $('#gOpts');
+  const ch = G.arena ? Arena.options(c) : checkOf(c), ob = $('#gOpts'); // на арене у каждой карточки 4 варианта
+  G.t0 = Date.now();
   ob.hidden = !ch; ob.innerHTML = ''; $('#gShow').hidden = !!ch;
   if (ch) shuffle(ch.map((t, k) => [t, k === 0])).forEach(([t, right]) => {
     const b = document.createElement('button'); b.className = 'opt'; b.dataset.right = right ? '1' : '';
@@ -548,6 +549,10 @@ function pickOpt(btn, right) {
   const c = G.q[G.i];
   $$('#gOpts .opt').forEach((b) => { b.disabled = true; if (b.dataset.right) b.classList.add('right'); });
   if (G.arena) Arena.onPick(right);
+  if (right && G.arena) { // на арене без лишних кнопок: быстрый верный ответ = «Легко» (крит), обычный = «Помню»
+    const fast = Date.now() - G.t0 < 6000 + 35 * c.q.length;
+    setTimeout(() => applyGrade(fast ? 3 : 2), 450); return;
+  }
   if (right) { showGrades(c, true); return; } // верно — остаётся оценить, насколько легко
   btn.classList.add('wrong');
   $('#gA').hidden = false; $('#gExplain').hidden = !LESSONS[c.lecture];

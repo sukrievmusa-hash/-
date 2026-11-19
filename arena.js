@@ -428,6 +428,23 @@
   }
   window.addEventListener('resize', () => { if (F) fitCanvas(); });
 
-  window.Arena = { start, stop, onPick, onGrade, useShield, boost, beforeFinish, result, renderHome, openHub, fight, renderMods: () => F && renderMods() };
+  /* 4 варианта ответа: готовые из checks.js, недостающие — ответы похожих карточек той же лекции/раздела */
+  const norm = (t) => String(t).replace(/\s+/g, ' ').trim().toLowerCase();
+  function options(c) {
+    const ch = checkOf(c), right = ch ? ch[0] : c.a, out = ch ? ch.slice(0, 4) : [right];
+    if (out.length >= 4) return out;
+    const used = new Set(out.map(norm)), L = right.length, math = /\$/.test(right);
+    const take = (list) => list
+      .filter((x) => !used.has(norm(x.a)))
+      .map((x) => [x.a, Math.abs(Math.log((x.a.length + 8) / (L + 8))) + (/\$/.test(x.a) !== math ? 0.6 : 0) + Math.random() * 0.45])
+      .sort((a, b) => a[1] - b[1])
+      .forEach(([a]) => { if (out.length < 4 && !used.has(norm(a))) { used.add(norm(a)); out.push(a); } });
+    take(S.cards.filter((x) => x.lecture === c.lecture && x.id !== c.id));
+    if (out.length < 4) take(S.cards.filter((x) => sectionOf(x) === sectionOf(c) && x.id !== c.id));
+    if (out.length < 4) take(S.cards.filter((x) => x.id !== c.id));
+    return out;
+  }
+
+  window.Arena = { options, start, stop, onPick, onGrade, useShield, boost, beforeFinish, result, renderHome, openHub, fight, renderMods: () => F && renderMods() };
   renderHome();
 })();

@@ -426,3 +426,5 @@ button.primary,button.ghost,button.danger,.filebtn{border-radius:8px}
 .arenacall .linkbtn{color:#9fc0ff;align-self:flex-start}
 @media (prefers-reduced-motion:reduce){.stage *{animation-duration:.01s!important}}
 #game.arena .flash.kofade{opacity:.25;transition:opacity .4s}
+#game.arena .opt{font-size:15px;line-height:1.35;padding:11px 12px}
+#game.arena .opts{margin-bottom:6px}
