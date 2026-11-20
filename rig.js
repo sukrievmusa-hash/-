@@ -229,79 +229,63 @@ window.Rig = (() => {
   function bodyStart(piv, lean, dip) { cx.save(); cx.translate(piv, dip); cx.rotate(rad(lean)); cx.translate(-piv, 0); }
 
   /* ----- Голем Матриц ----- */
+  /* Голем из картинки пользователя: корпус с ногами, шлем и рука-кулак (две копии: ближняя и дальняя) */
+  const GK = .5, GS = [553, 159], GFOOT = [520, 466]; // масштаб, плечо и точка опоры в координатах листа
+  const GPART = { gbody: [410, 81, 'golem2_body'], ghelm: [280, 70, 'golem2_helm'], garm: [628, 91, 'golem2_arm'] };
+  Object.keys(GPART).forEach((k) => { const im = new Image(); im.onload = () => { SPR[k] = im; }; im.src = 'arena/' + GPART[k][2] + '.webp?v=1'; });
+  function gimg(name, dark) { // оригинальные цвета + вспышка + затемнение дальней руки
+    const tn = TINT > 0 ? Math.round(TINT * 6) / 6 : 0, key = ['g', name, dark ? 1 : 0, tn].join('|'); if (CACHE[key]) return CACHE[key];
+    const im = SPR[name], c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
+    for (let i = 0; i < px.length; i += 4) {
+      if (!px[i + 3]) continue;
+      let r = px[i], gg = px[i + 1], b = px[i + 2];
+      if (dark) { r *= .68; gg *= .66; b *= .66; }
+      if (tn > 0) { r += (255 - r) * tn; gg += (255 - gg) * tn; b += (255 - b) * tn; }
+      px[i] = r; px[i + 1] = gg; px[i + 2] = b;
+    }
+    g.putImageData(d, 0, 0); return (CACHE[key] = c);
+  }
   const golem = {
-    sx: 40, D: (p) => 64 + 12 * p, w: 70,
+    sx: 40, D: (p) => 64 + 12 * p, w: 52,
     draw(P, g) {
       const t = P.t, bp = -P.p, k = P.kickB;
-      const lean = 8 + 9 * bp + 10 * k - 8 * P.stun + Math.sin(t * 31) * (.4 + Math.abs(bp)) * 1.1;
-      const dip = 3 + 8 * Math.max(0, -bp) + Math.sin(t * 15) * .6;
-      const tf = leanTf(20, lean, dip), STONE = '#7a8e9e', DK = '#4a5866';
-      const legsD = [[-8, -64, -28], [20, -64, 34]];
-      const legDraw = ([hx, hy, fx], far) => {
-        const effB = .45 + 1.1 * k + .45 * Math.abs(bp), [sdx, lf] = P.koB > .2 ? [0, 0] : stepFoot((P.sid || 'r') + 'g' + hx, hx > 0 ? .5 : 0, t, effB, 11 + 16 * effB, P.bx - fx);
-        const h = tf(hx, hy), [kn, ft] = ik(h, [fx + sdx, -lf], 32, 34, -1);
-        limb(h, kn, far ? 28 : 32, far ? '#5d6f7e' : STONE); limb(kn, ft, far ? 24 : 28, far ? '#4c5a68' : '#66798a');
-        disc(kn[0], kn[1], 10, far ? '#56606e' : '#6a7686'); glow(kn[0], kn[1], 9, '#ff9a2e', .5); cx.beginPath(); cx.arc(kn[0], kn[1], 3, 0, 7); cx.fillStyle = C('#ffb02e'); cx.fill();
-        cx.save(); cx.translate(0, ft[1]); poly([[ft[0] - 16, 0], [ft[0] + 22, 0], [ft[0] + 26, -9], [ft[0] + 16, -20], [ft[0] - 12, -19]]); shape(vg(-20, 0, far ? '#4a5866' : '#5d6f7e')); cx.restore();
-      };
-      const S1 = tf(48, -152), S2 = tf(-4, -160);
-      const arm = (S, T, far) => {
-        const [el, hd] = ik(S, T, 44, 46, 1), c = far ? '#5d6f7e' : STONE;
-        limb(S, el, far ? 24 : 29, c); limb(el, hd, far ? 22 : 26, far ? '#55626f' : '#6c7f8f');
-        const wr = [el[0] + (hd[0] - el[0]) * .72, el[1] + (hd[1] - el[1]) * .72];
-        cx.lineCap = 'butt'; cx.strokeStyle = C('#ffb02e'); cx.lineWidth = 4; const a = Math.atan2(hd[1] - el[1], hd[0] - el[0]) + Math.PI / 2;
-        line([wr[0] + Math.cos(a) * 11, wr[1] + Math.sin(a) * 11], [wr[0] - Math.cos(a) * 11, wr[1] - Math.sin(a) * 11]); cx.stroke();
-        disc(el[0], el[1], 10, far ? '#56606e' : '#6a7686'); glow(el[0], el[1], 10, '#ff9a2e', .45);
-        return hd;
-      };
-      const fist = (hd, far) => {
-        cx.save(); cx.translate(hd[0], hd[1]);
-        blob([[-17, -17], [10, -19], [21, -5], [17, 15], [-7, 18], [-19, 5]]); shape(vg(-16, 15, far ? '#55626f' : '#6f8292'));
-        cx.strokeStyle = OUT; cx.lineWidth = 2; [-8, -1, 6].forEach((x) => { cx.beginPath(); cx.moveTo(x, -12); cx.lineTo(x + 2, 10); cx.stroke(); });
-        cx.restore();
-      };
+      const lean = 1.5 + 3 * bp + 4 * k - 3 * P.stun + Math.sin(t * 31) * (.2 + Math.abs(bp)) * .5;
+      const dip = 1 + 3 * Math.max(0, -bp) + Math.sin(t * 15) * .4;
       cx.save(); cx.translate(P.bx, 0); FLIP = true; cx.scale(-1, 1);
-      shadow(6, 80);
+      shadow(0, 70);
       if (P.koB) { cx.translate(-30, P.koB * 18); cx.rotate(-rad(P.koB * 34)); cx.translate(30, 0); cx.globalAlpha = 1 - .5 * P.koB; }
-      TINT = P.flashB * .85; TC = [255, 255, 255];
+      TINT = P.flashB * .85;
       const loc = (w) => [P.bx - w[0], w[1]];
-      legDraw(legsD[0], true);
-      const hdF = arm(S2, loc(g.gF), true); fist(hdF, true);
-      bodyStart(20, lean, dip);
-      cx.translate(8, -120); cx.scale(1.22, 1.22); cx.translate(-8, 120);
-      poly([[-46, -150], [-30, -152], [-30, -110], [-46, -108]]); shape(vg(-152, -108, '#3c4654'));
-      [-140, -128, -116].forEach((y) => { cx.beginPath(); cx.arc(-38, y, 2.2, 0, 7); cx.fillStyle = C('#ff8a1e'); cx.fill(); });
-      const body = [[-40, -116], [-32, -156], [6, -172], [44, -162], [58, -126], [50, -88], [16, -74], [-26, -80]];
-      blob(body); shape(vg(-172, -74, STONE, .3, .45));
-      cx.save(); blob(body); cx.clip();
+      const fx = (GS[0] - GFOOT[0]) * GK, fy = (GFOOT[1] - GFOOT[1]) * GK; // опора: перед ступни (в локальных координатах)
+      const body = () => { // тело в системе листа: плечо в (0, ys), вперёд — вправо (лист смотрит влево, поэтому отражён)
+        cx.translate(fx, 0); cx.translate(0, dip); cx.rotate(rad(lean)); cx.translate(-fx, 0);
+      };
+      const sheet = () => { cx.scale(-GK, GK); cx.translate(-GS[0], -GFOOT[1]); };
+      // локальное плечо с учётом наклона
+      const cl = Math.cos(rad(lean)), sl = Math.sin(rad(lean)), sy = (GS[1] - GFOOT[1]) * GK;
+      const Sh = [fx + (0 - fx) * cl - (sy) * sl, dip + (0 - fx) * sl + sy * cl];
+      const arm = (T, far) => {
+        const v = [T[0] - Sh[0], T[1] - Sh[1]], dist = Math.hypot(v[0], v[1]), L = 246 * GK, st = clamp(dist / L, .7, 1.15) * 1.04;
+        cx.save(); cx.translate(Sh[0], Sh[1]); cx.rotate(Math.atan2(v[1], v[0]) - Math.PI / 2); cx.scale(-GK, GK * st);
+        if (SPR.garm) cx.drawImage(gimg('garm', far), -55, -45); cx.restore();
+      };
+      // дальняя рука
+      arm(loc(g.gF), true);
+      // корпус
+      cx.save(); body(); sheet();
+      if (SPR.gbody) cx.drawImage(gimg('gbody', false), GPART.gbody[0], GPART.gbody[1]);
+      // шлем
+      if (SPR.ghelm) { const hb = P.kickB * 5 - P.stun * 7 + Math.sin(t * 2.2) * 1; cx.save(); cx.translate(458, 157); cx.rotate(rad(-hb)); cx.drawImage(gimg('ghelm', false), 358 - 458, 72 - 157); cx.restore(); }
       const pulse = .55 + .45 * Math.abs(Math.sin(t * 3 + bp));
-      cx.strokeStyle = RGBA('#ffb02e', .55 + .4 * pulse); cx.lineWidth = 2;
-      for (let x = -40; x <= 60; x += 13) { line([x, -175], [x + 6, -70]); cx.stroke(); }
-      for (let y = -165; y <= -75; y += 13) { line([-45, y], [62, y + 3]); cx.stroke(); }
+      glow(420, 118, 22, '#ff8a1e', .25 + .25 * pulse);
+      if (P.hpFrac < .5) { cx.strokeStyle = OUT; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(560, 250); cx.lineTo(540, 290); cx.lineTo(556, 310); cx.lineTo(530, 350); cx.stroke(); glow(545, 300, 26, '#ff5a2a', .6); }
       cx.restore();
-      glow(14, -122, 46, '#ff8a1e', .18 + .2 * pulse);
-      poly([[6, -132], [18, -138], [30, -132], [30, -118], [18, -112], [6, -118]]); shape(C('#ffb02e', .15), 2); glow(18, -125, 22, '#ffb02e', .9);
-      poly([[-30, -94], [44, -92], [40, -78], [-26, -80]]); shape(vg(-94, -78, DK)); [-20, 0, 20, 36].forEach((x) => bolt(x, -86));
-      if (P.hpFrac < .5) { cx.strokeStyle = OUT; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(30, -160); cx.lineTo(20, -146); cx.lineTo(28, -140); cx.lineTo(16, -126); cx.stroke(); glow(22, -144, 14, '#ff5a2a', .6); }
-      // голова
-      const hb = P.kickB * 6 - P.stun * 8;
-      cx.save(); cx.translate(14, -176); cx.rotate(rad(hb));
-      poly([[-16, -18], [18, -20], [22, 0], [12, 10], [-12, 10], [-18, -4]]); shape(vg(-20, 10, '#8597a6', .3, .4));
-      poly([[-6, -8], [20, -9], [20, -2], [-6, -1]]); shape(C('#1a1f2b'), 2);
-      lamp(4, -5, 2.8, '#ff2a20'); lamp(14, -5, 2.8, '#ff2a20');
-      poly([[0, 4], [16, 4], [14, 9], [2, 9]]); shape(C('#3c4654'), 1.6);
-      cx.restore();
-      cx.restore();
-      // наплечник ближней руки
-      legDraw(legsD[1], false);
-      const hdN = arm(S1, loc(g.gN), false);
-      cx.save(); cx.translate(S1[0], S1[1]); cx.rotate(rad(lean * .6));
-      poly([[-22, -24], [24, -24], [28, 4], [20, 22], [-20, 22], [-26, 2]]); shape(vg(-20, 18, '#8193a3', .3, .4));
-      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) txt(String(((r * 3 + c) * 7 + 3) % 9 + 1), -13 + c * 13, -12 + r * 12, 10, '#ffb02e');
-      cx.restore();
-      fist(hdN, false);
+      // ближняя рука поверх тела
+      arm(loc(g.gN), false);
       TINT = 0; FLIP = false; cx.restore();
-      return { body: [P.bx - 10, -120], head: [P.bx - 20, -196], mouth: [P.bx - 30, -190] };
+      return { body: [P.bx - 6, -120], head: [P.bx - 55, -160], mouth: [P.bx - 70, -140] };
     }
   };
 
@@ -568,5 +552,5 @@ window.Rig = (() => {
     }
     return { contact: [gw.gN[0], gw.gN[1]], bull: la.bull, bullRear: la.bullRear, bullFront: la.bullFront, boss: an.body, bossHead: an.head, mouth: an.mouth, bossRear: [an.rear, -40], plants: PLANTS };
   }
-  return { draw, VW };
+  return { draw, VW, _golem: golem };
 })();
