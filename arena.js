@@ -809,7 +809,8 @@
     if (!q.length) { q = extraNewCards(sc); mode = 'new'; }
     if (!q.length) { q = practiceCards(sc); mode = 'prac'; }
     const n = sizeOf(sec);
-    if (sec === SESSION) [q, mode] = sessionQueue(n);
+    if (hasLevels(sec)) [q, mode] = levelQueue(sec, n); // билет по уровням: 12 лёгких, 8 средних, 5 сложных
+    else if (sec === SESSION) [q, mode] = sessionQueue(n);
     else if (sec >= 90 && q.length < n) q = coopQueue(sec, n); // сессии: всегда полный билет
     q = q.slice(0, n);
     if (!q.length) return;
