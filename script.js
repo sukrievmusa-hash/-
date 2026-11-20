@@ -535,6 +535,7 @@ function nextCard() {
   if (G.diag && G.i >= G.q.length) diagExtend();
   if (G.i >= G.q.length || G.hearts <= 0) { if (G.arena && Arena.beforeFinish(G)) return; return finish(); }
   const c = G.q[G.i];
+  if (G.arena) { const gm = $('#game'); if (gm) gm.scrollTop = 0; }
   hearts();
   $('#gBar').style.width = (Math.min(G.i, G.total) / G.total * 100) + '%';
   $('#gCombo').textContent = G.combo >= 2 ? `Серия верных: ${G.combo}` : '';
@@ -575,6 +576,11 @@ function pickOpt(btn, right) {
   btn.classList.add('wrong');
   $('#gA').hidden = false; $('#gExplain').hidden = !LESSONS[c.lecture];
   $('#gNext').hidden = false;
+  if (G.arena) { // на арене: показываем верный ответ и через 2 с сами идём дальше (кнопка «Дальше» ускоряет)
+    const ri = G.i, ok = $('#gOpts .opt.right');
+    if (ok) { const box = $('#game'), top = ok.getBoundingClientRect().top - ($('#arena') ? $('#arena').getBoundingClientRect().bottom : 0) - 14; box.scrollBy({ top, behavior: 'smooth' }); }
+    setTimeout(() => { if (G && !G.done && G.i === ri && G.q[G.i] === c) applyGrade(0); }, 2000);
+  }
 }
 $('#gNext').onclick = () => applyGrade(0);
 $$('#gGrades button').forEach((b) => b.addEventListener('click', () => applyGrade(+b.dataset.g)));

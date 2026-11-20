@@ -542,3 +542,5 @@ button.primary,button.ghost,button.danger,.filebtn{border-radius:8px}
 #game.arena #arena{position:sticky;top:0;z-index:30;background:#0b0e16;padding:6px 12px 4px;margin:0 -12px;box-shadow:0 8px 14px -6px rgba(0,0,0,.7)}
 #game.arena .stage{height:clamp(196px,31vh,300px)}
 @media (max-height:700px){#game.arena .stage{height:208px}#game.arena .aname{font-size:11px}}
+#game.arena .opt.right{border-color:#2fd47a;background:rgba(47,212,122,.2);box-shadow:0 0 0 2px rgba(47,212,122,.35)}
+#game.arena .opt.wrong{border-color:#ff4d4d;background:rgba(255,77,77,.18)}
