@@ -104,11 +104,11 @@ window.Rig = (() => {
   }
   /* ---------- спрайты быка: собранный бык из образца + нижние части ног (красный → перекрашивается под цвет игрока) ---------- */
   const SPR = {}, CACHE = {};
-  const PART = { body: [60, 205], hindN: [115, 392], hindF: [168, 420], frontR: [262, 392], frontS: [317, 423] };
+  const PART = { body: [60, 205], hindN: [115, 392], hindF: [168, 420], frontS: [317, 423] };
   Object.keys(PART).forEach((k) => { const im = new Image(); im.onload = () => { SPR[k] = im; }; im.src = 'arena/bull2_' + k + '.webp?v=1'; });
   function hslOf(h) { const [r, g, b] = hex(h).map((v) => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; let hh = 0; if (d) { hh = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; } return hh * 60; }
-  function recolor(name, col, tint, tc) {
-    const key = [name, col, tint, tc].join('|'); if (CACHE[key]) return CACHE[key];
+  function recolor(name, col, tint, tc, lite) {
+    const key = [name, col, tint, tc, lite ? 1 : 0].join('|'); if (CACHE[key]) return CACHE[key];
     const im = SPR[name], c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
     const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0);
     const d = g.getImageData(0, 0, c.width, c.height), px = d.data, shift = hslOf(col) - 3;
@@ -125,19 +125,56 @@ window.Rig = (() => {
           const q = [[C2, X, 0], [X, C2, 0], [0, C2, X], [0, X, C2], [X, 0, C2], [C2, 0, X]][k % 6]; r = q[0] + m; gg = q[1] + m; b = q[2] + m;
         }
       }
+      if (lite) { r = Math.min(1, r * 1.35); gg = Math.min(1, gg * 1.35); b = Math.min(1, b * 1.35); }
       if (tint > 0) { r += (tc[0] / 255 - r) * tint; gg += (tc[1] / 255 - gg) * tint; b += (tc[2] / 255 - b) * tint; }
       px[i] = r * 255; px[i + 1] = gg * 255; px[i + 2] = b * 255;
     }
     g.putImageData(d, 0, 0); return (CACHE[key] = c);
   }
-  const img = (name, col) => recolor(name, col, TINT > 0 ? Math.round(TINT * 6) / 6 : 0, TC);
+  const img = (name, col, lite) => recolor(name, col, TINT > 0 ? Math.round(TINT * 6) / 6 : 0, TC, lite);
   // нога, стоящая на полу: голень поворачивается вокруг колена так, чтобы копыто касалось пола (lift — подъём при скрежете)
-  const STAND = { hindN: { J: [137, 406], F: [130, 466] }, hindF: { J: [182, 413], F: [190, 466] }, frontS: { J: [333, 415], F: [342, 466] } };
-  function standLeg(name, col, tf, lift) {
-    if (!SPR[name]) return;
-    const S = STAND[name], j = tf(...L(S.J[0], S.J[1])), vx = (S.F[0] - S.J[0]) * K, vy = (S.F[1] - S.J[1]) * K, R = Math.hypot(vx, vy), th = Math.atan2(vx, vy);
-    const ac = Math.acos(clamp((-lift - j[1]) / R, -1, 1)), a1 = th - ac, a2 = th + ac, a = clamp(Math.abs(a1) < Math.abs(a2) ? a1 : a2, -.6, .6);
-    cx.save(); cx.translate(j[0], j[1]); cx.rotate(a); cx.scale(K, K); cx.drawImage(img(name, col), PART[name][0] - S.J[0], PART[name][1] - S.J[1]); cx.restore();
+  /* ---------- ноги: копыта стоят на полу и не дёргаются ----------
+     Тело едет вперёд → копыта стоят на месте, отстающая нога делает шаг вперёд.
+     Тело толкают назад → бык упирается, копыта скользят по полу вместе с ним (искры). */
+  const LEG4 = [ // J — колено на образце, F — точка копыта на полу, s — масштаб (ближняя передняя крупнее), pair — пара, по которой шагают по очереди
+    { n: 'hindF', J: [182, 413], F: [190, 466], s: 1, pair: 0, d0: -6 },
+    { n: 'frontS', J: [333, 415], F: [342, 466], s: 1, pair: 1, d0: 2 },
+    { n: 'hindN', J: [137, 406], F: [130, 466], s: 1, pair: 0, d0: 4 },
+    { n: 'frontS', J: [317, 404], F: [304, 466], s: 1.22, pair: 1, d0: -7, lite: true, PJ: [333, 418] },
+  ];
+  const FEET = {}, BACK = 11, FWD = 8, SWT = .2;
+  function feetUpdate(P, base) {
+    const sid = P.sid || 'l', st = FEET[sid] || (FEET[sid] = { bx: base, t: P.t, f: LEG4.map((L) => ({ d: L.d0, sw: null })) });
+    let dt = P.t - st.t, db = base - st.bx; st.t = P.t; st.bx = base;
+    if (dt < 0 || dt > .5 || Math.abs(db) > 40) { dt = 0; db = 0; } // пауза вкладки или перескок — не дёргаем
+    const ko = P.koM > .2, spd = dt > 0 ? Math.abs(db) / dt : 0, swT = clamp(SWT / (1 + spd / 50), .06, SWT);
+    st.f.forEach((f, i) => {
+      if (f.sw) { // шаг: копыто летит вперёд по дуге
+        f.sw.u += dt / f.sw.T; f.sw.from -= db;
+        if (f.sw.u >= 1) { f.d = f.sw.to; f.sw = null; const L = LEG4[i]; PLANTS.push({ x: MIR ? VW - (P.bx + L.wx) : P.bx + L.wx, e: .35 }); }
+        return;
+      }
+      if (db > 0) f.d -= db;                       // идёт вперёд: копыто стоит на полу
+      else if (db < 0 && Math.random() < Math.min(.6, -db * .5)) { const L = LEG4[i]; PLANTS.push({ x: MIR ? VW - (P.bx + L.wx) : P.bx + L.wx, e: Math.min(1, -db * .4) }); } // скользит назад
+      f.d = clamp(f.d, -BACK - 4, FWD + 4);
+      const busy = st.f.some((g, k) => g.sw && LEG4[k].pair === LEG4[i].pair) || st.f.filter((g) => g.sw).length >= 2;
+      if (!ko && f.d < -BACK && !busy) f.sw = { u: 0, from: f.d, to: FWD, T: swT };
+    });
+    return st.f.map((f) => {
+      if (!f.sw) return { d: f.d, lift: 0 };
+      const u = f.sw.u, e = u * u * (3 - 2 * u);
+      return { d: f.sw.from + (f.sw.to - f.sw.from) * e, lift: Math.sin(Math.PI * u) * 9 };
+    });
+  }
+  function leg4(G, col, tf, ft) {
+    if (!SPR[G.n]) return;
+    const PJ = G.PJ || (G.n === 'frontS' ? [333, 415] : G.J), PF = G.n === 'frontS' ? [342, 466] : G.F; // точки на самом спрайте
+    const j = tf(...L(G.J[0], G.J[1])), fp = L(G.F[0], G.F[1]), tx = fp[0] + ft.d, ty = -ft.lift;
+    const sv = [(PF[0] - PJ[0]) * K * G.s, (PF[1] - PJ[1]) * K * G.s], v = [tx - j[0], ty - j[1]];
+    const st = clamp(Math.hypot(v[0], v[1]) / Math.hypot(sv[0], sv[1]), .88, 1.12);
+    G.wx = tx;
+    cx.save(); cx.translate(j[0], j[1]); cx.rotate(Math.atan2(v[1], v[0])); cx.scale(st, 1); cx.rotate(-Math.atan2(sv[1], sv[0])); cx.scale(K * G.s, K * G.s);
+    cx.drawImage(img(G.n, col, G.lite), PART[G.n][0] - PJ[0], PART[G.n][1] - PJ[1]); cx.restore();
   }
   function drawBull(P, S) {
     const t = P.t, pr = P.p, { tf, PIV, dip, lean } = S, sc = P.scars;
@@ -147,16 +184,13 @@ window.Rig = (() => {
     if (P.koM) { cx.translate(-50, 0); cx.rotate(-rad(P.koM * 14)); cx.translate(50, 0); }
     TINT = P.flashM * .7; TC = [255, 50, 40];
     if (P.charge > 0 && TINT < P.charge * .45) { TINT = P.charge * .45; TC = [130, 220, 255]; }
-    const eff = .45 + 1.1 * P.kickM + .45 * Math.abs(pr), sid = P.sid || 'l';
-    const lift = (i, off, x) => P.koM > .2 ? 0 : stepFoot(sid + 'b' + i, off, t, eff, 0, P.bx + x)[1] * .22;
+    const eff = .45 + 1.1 * P.kickM + .45 * Math.abs(pr);
+    const FT = feetUpdate(P, P.bx - (P.jit || 0));
     // дальняя задняя нога за телом
-    standLeg('hindF', BLUE, tf, lift(1, .5, -56));
+    leg4(LEG4[0], BLUE, tf, FT[0]); leg4(LEG4[1], BLUE, tf, FT[1]); leg4(LEG4[3], BLUE, tf, FT[3]); // передние уходят под корпус — шов закрыт коленом
     // тело целиком (голова, шея, хвост — как на образце, ничего не отрывается)
     cx.save(); cx.translate(PIV[0], dip); cx.rotate(rad(lean)); cx.translate(-PIV[0], 0);
     if (SPR.body) { cx.save(); cx.scale(K, K); cx.translate(-OX, -OY); cx.drawImage(img('body', BLUE), PART.body[0], PART.body[1]);
-      // поднятая передняя нога бьёт копытом
-      if (SPR.frontR) { const pw = P.koM > .2 ? .35 : (Math.sin(t * (6 + 6 * eff)) * .16 + .06) * (.4 + .8 * eff);
-        cx.save(); cx.translate(318, 400); cx.rotate(pw); cx.drawImage(img('frontR', BLUE), PART.frontR[0] - 318, PART.frontR[1] - 400); cx.restore(); }
       cx.restore(); }
     const eye = L(413, 289); glow(eye[0], eye[1], 9, '#ffb02e', .45 + .3 * Math.sin(t * 8));
     if (P.turbo) { const w = L(308, 333); glow(w[0], w[1], 18, '#ff8a1e', .5 + .3 * Math.abs(Math.sin(t * 6))); }
@@ -175,8 +209,7 @@ window.Rig = (() => {
     }
     cx.restore();
     // ближние ноги поверх тела
-    standLeg('hindN', BLUE, tf, lift(0, 0, -77));
-    standLeg('frontS', BLUE, tf, lift(2, .25, 5));
+    leg4(LEG4[2], BLUE, tf, FT[2]);
     TINT = 0;
     // щит
     const sh = Math.max(P.shield, P.blockT);
@@ -513,7 +546,7 @@ window.Rig = (() => {
       gw = { gN: [gx - 6, -125], gF: [gx - 2, -118] };
       P.bx = VW - bxl;
     } else {
-      P.bx = gx - S.gN[0] + P.introM + jit;
+      P.bx = gx - S.gN[0] + P.introM + jit; P.jit = jit;
       gw = { gN: [P.bx + S.gN[0], S.gN[1]], gF: [P.bx + S.gF[0], S.gF[1]] };
       if (P.hide !== 'bull') drawBull(P, S);
       la = { bull: [P.bx - 30 * K, -155 * K], bullRear: [P.bx - 255 * K, -40], bullFront: [P.bx + 125 * K, -40] };
@@ -525,7 +558,7 @@ window.Rig = (() => {
     if (P.key === 'rival') {
       const P2 = Object.assign({}, P, { p: -P.p, kickM: P.kickB, flashM: P.flashB, koM: P.koB, scars: P.rscars || 0, col: P.rcol, shield: 0, blockT: 0, charge: 0, t: P.t + 1.7, hide: null, sid: 'R' });
       const S2 = bullPose(P2), gx2 = VW / 2 + P2.p * 30;
-      P2.bx = gx2 - S2.gN[0] + P.introB - jit;
+      P2.bx = gx2 - S2.gN[0] + P.introB - jit; P2.jit = -jit;
       if (P.hide !== 'boss') { cx.save(); cx.translate(VW, 0); cx.scale(-1, 1); FLIP = true; MIR = true; drawBull(P2, S2); FLIP = false; MIR = false; cx.restore(); }
       an = { body: [VW - (P2.bx - 30 * K), -155 * K], head: [VW - (P2.bx + 80 * K), -190 * K], mouth: [VW - (P2.bx + 105 * K), -165 * K], rear: VW - (P2.bx - 255 * K) };
     } else {
