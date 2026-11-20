@@ -31,22 +31,21 @@
   const str = (s) => { const b = enc.encode(s); return [b.length >> 8, b.length & 255, ...b]; };
   const remLen = (n) => { const o = []; do { let b = n % 128; n = Math.floor(n / 128); if (n > 0) b |= 128; o.push(b); } while (n > 0); return o; };
   const pkt = (type, body) => Uint8Array.from([type, ...remLen(body.length), ...body]);
-  function Net(topic, onMsg, onState) {
-    let ws = null, ready = false, closed = false, ping = 0, ui = 0, buf = new Uint8Array(0);
-    const cid = 'mr' + Math.random().toString(36).slice(2, 10);
-    const brokers = (window.MR_CONFIG && MR_CONFIG.duelBrokers) || BROKERS;
+  /* Один канал держит соединения СРАЗУ со всеми брокерами: шлёт во все, слушает все, дубли отбрасывает.
+     Так двое не могут оказаться на разных брокерах (раньше из-за этого «хозяин не в сети»). */
+  function Link(url, topic, cid, onMsg, onUp) {
+    let ws = null, ready = false, closed = false, ping = 0, to = 0, wait = 600, buf = new Uint8Array(0);
+    const retry = (me) => { clearTimeout(to); clearInterval(ping); if (ready) { ready = false; onUp(false); } try { me.close(); } catch (e) { /* уже закрыт */ } if (!closed) setTimeout(open, wait = Math.min(wait * 1.6, 8000)); };
     function open() {
       if (closed) return;
-      const url = brokers[ui % brokers.length]; let done = false, to = 0; buf = new Uint8Array(0);
-      onState('connecting');
-      const retry = (ms) => { clearTimeout(to); clearInterval(ping); ready = false; try { me.close(); } catch (e) { /* уже закрыт */ } if (!closed) setTimeout(open, ms); };
-      let me; try { me = ws = new WebSocket(url, 'mqtt'); } catch (e) { ui++; return setTimeout(open, 500); }
+      buf = new Uint8Array(0); let me;
+      try { me = ws = new WebSocket(url, 'mqtt'); } catch (e) { setTimeout(open, 3000); return; }
       const tx = (b) => { if (me.readyState === 1) me.send(b); };
       me.binaryType = 'arraybuffer';
-      to = setTimeout(() => { if (!ready && ws === me) { ui++; retry(200); } }, 5000);
+      to = setTimeout(() => { if (!ready && ws === me) retry(me); }, 7000);
       me.onopen = () => tx(pkt(0x10, [0, 4, 77, 81, 84, 84, 4, 2, 0, 40, ...str(cid)]));
-      me.onerror = () => { if (ws === me && !ready) { ui++; retry(300); } };
-      me.onclose = () => { if (ws !== me || closed) return; if (ready) { clearInterval(ping); ready = false; onState('connecting'); setTimeout(open, 800); } else if (!done) { ui++; retry(300); } };
+      me.onerror = () => { if (ws === me) retry(me); };
+      me.onclose = () => { if (ws === me) retry(me); };
       me.onmessage = (e) => {
         const u = new Uint8Array(e.data), nb = new Uint8Array(buf.length + u.length); nb.set(buf); nb.set(u, buf.length); buf = nb;
         for (;;) {
@@ -55,8 +54,8 @@
           do { if (i >= buf.length) return; b = buf[i++]; len += (b & 127) * mul; mul *= 128; } while (b & 128);
           if (buf.length < i + len) return;
           const t = buf[0] >> 4, fl = buf[0] & 15, body = buf.slice(i, i + len); buf = buf.slice(i + len);
-          if (t === 2) { if (body[1] === 0) tx(pkt(0x82, [0, 1, ...str(topic), 0])); else { ui++; retry(500); return; } }
-          else if (t === 9) { ready = true; done = true; clearTimeout(to); onState('ready'); clearInterval(ping); ping = setInterval(() => { try { tx(Uint8Array.of(0xC0, 0)); } catch (x) { /* связь оборвалась */ } }, 20000); }
+          if (t === 2) { if (body[1] === 0) tx(pkt(0x82, [0, 1, ...str(topic), 0])); else { retry(me); return; } }
+          else if (t === 9) { ready = true; wait = 600; clearTimeout(to); onUp(true); clearInterval(ping); ping = setInterval(() => { try { tx(Uint8Array.of(0xC0, 0)); } catch (x) { /* связь оборвалась */ } }, 20000); }
           else if (t === 3) {
             const tl = (body[0] << 8) | body[1]; let k = 2 + tl; if ((fl >> 1) & 3) k += 2;
             try { onMsg(JSON.parse(dec.decode(body.slice(k)))); } catch (x) { /* чужой мусор в канале */ }
@@ -66,9 +65,29 @@
     }
     open();
     return {
-      send(o) { if (!ready || !ws || ws.readyState !== 1) return false; try { ws.send(pkt(0x30, [...str(topic), ...enc.encode(JSON.stringify(o))])); return true; } catch (e) { return false; } },
-      close() { closed = true; clearInterval(ping); try { ws.close(); } catch (e) { /* уже закрыт */ } },
-      get ready() { return ready; }
+      get ready() { return ready; },
+      put(bytes) { if (!ready || !ws || ws.readyState !== 1) return false; try { ws.send(bytes); return true; } catch (e) { return false; } },
+      close() { closed = true; clearTimeout(to); clearInterval(ping); try { ws.close(); } catch (e) { /* уже закрыт */ } }
+    };
+  }
+  function Net(topic, onMsg, onState) {
+    const brokers = (window.MR_CONFIG && MR_CONFIG.duelBrokers) || BROKERS;
+    const cid = 'mr' + Math.random().toString(36).slice(2, 10), seenN = new Set(), order = [];
+    let closed = false, last = 'connecting';
+    const recv = (m) => { // одно и то же сообщение приходит от нескольких брокеров: берём первое
+      if (m && m.n) { if (seenN.has(m.n)) return; seenN.add(m.n); order.push(m.n); if (order.length > 400) seenN.delete(order.shift()); }
+      if (!closed) onMsg(m);
+    };
+    const state = () => { const s = links.some((l) => l.ready) ? 'ready' : 'connecting'; if (s !== last) { last = s; if (!closed) onState(s); } };
+    onState('connecting');
+    const links = brokers.map((u, i) => Link(u, topic, cid + i, recv, state));
+    return {
+      send(o) {
+        const bytes = pkt(0x30, [...str(topic), ...enc.encode(JSON.stringify(Object.assign({ n: Math.random().toString(36).slice(2, 10) }, o)))]);
+        let ok = false; links.forEach((l) => { if (l.put(bytes)) ok = true; }); return ok;
+      },
+      close() { closed = true; links.forEach((l) => l.close()); },
+      get ready() { return links.some((l) => l.ready); }
     };
   }
 
