@@ -79,7 +79,7 @@
   const clearTimers = () => { timers.forEach(clearInterval); timers = []; };
   const send = (o) => net && net.send(Object.assign({ id: myId }, o));
   const secs = () => Object.keys(window.BUILTIN_SECTIONS || {}).map(Number);
-  const secTitle = (k) => k === 99 ? 'Сессия 1. Математика (300 вопросов)' : `Раздел ${k}. ${SEC_NAMES[k]}`;
+  const secTitle = (k) => k === 99 ? 'Сессия 1. Математика (300 вопросов)' : k === 98 ? 'Английский язык (300 вопросов)' : `Раздел ${k}. ${SEC_NAMES[k]}`;
 
   function connect(code, host) {
     leaveNet(); room = code; isHost = host; list = []; peers = {}; teamOf = {}; hostSeen = host ? Date.now() : 0; note = '';

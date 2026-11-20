@@ -142,7 +142,7 @@ function setText(el, text) {
   });
   renderMath(el);
 }
-const secLabel = (k) => +k === 99 ? SEC_NAMES[k] : `Раздел ${k}. ${SEC_NAMES[k]}`;
+const secLabel = (k) => +k >= 90 ? SEC_NAMES[k] : `Раздел ${k}. ${SEC_NAMES[k]}`;
 
 /* ---------- вкладки ---------- */
 $$('.tabs button').forEach((b) => b.addEventListener('click', () => {
@@ -444,7 +444,7 @@ function renderProgress() {
     n.textContent = `Слабее всего: ${lecLabel(w.l.title)} — ${w.st.bad} ошибок из ${w.st.answers} ответов`; errBox.append(n);
   }
   if (secRows.length) { const h = document.createElement('div'); h.className = 'subh'; h.textContent = 'По разделам'; errBox.append(h);
-    secRows.forEach((x) => errBox.append(errRow(+x.k === 99 ? 'Сессия 1' : `Раздел ${x.k}`, SEC_NAMES[x.k], x.st))); }
+    secRows.forEach((x) => errBox.append(errRow(+x.k === 99 ? 'Сессия 1' : +x.k === 98 ? 'Английский' : `Раздел ${x.k}`, SEC_NAMES[x.k], x.st))); }
   if (lecRows.length) { const h = document.createElement('div'); h.className = 'subh'; h.textContent = 'По лекциям'; errBox.append(h);
     lecRows.forEach((x) => errBox.append(errRow(lecLabel(x.l.title), `${lecTopic(x.l.title)} · ${x.st.bad} из ${x.st.answers}`, x.st))); }
   const hb = $('#hardList'); hb.innerHTML = '';

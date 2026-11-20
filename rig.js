@@ -236,13 +236,14 @@ window.Rig = (() => {
   const GPART = { gbody: [410, 81, 'golem2_body'], ghelm: [280, 70, 'golem2_helm'], garm: [628, 91, 'golem2_arm'] };
   Object.keys(GPART).forEach((k) => { const im = new Image(); im.onload = () => { SPR[k] = im; }; im.src = 'arena/' + GPART[k][2] + '.webp?v=1'; });
   function gimg(name, dark) { // оригинальные цвета + вспышка + затемнение дальней руки
-    const tn = TINT > 0 ? Math.round(TINT * 6) / 6 : 0, key = ['g', name, dark ? 1 : 0, tn].join('|'); if (CACHE[key]) return CACHE[key];
+    const tn = TINT > 0 ? Math.round(TINT * 6) / 6 : 0, bt = BT > 0 ? Math.round(BT * 20) / 20 : 0, key = ['g', name, dark ? 1 : 0, tn, bt, bt ? BTC.join(',') : ''].join('|'); if (CACHE[key]) return CACHE[key];
     const im = SPR[name], c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
     const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0);
     const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
     for (let i = 0; i < px.length; i += 4) {
       if (!px[i + 3]) continue;
       let r = px[i], gg = px[i + 1], b = px[i + 2];
+      if (bt > 0) { const l = (r + gg + b) / 765; r += (BTC[0] * l * 2.2 - r) * bt; gg += (BTC[1] * l * 2.2 - gg) * bt; b += (BTC[2] * l * 2.2 - b) * bt; } // оттенок экзаменатора
       if (dark) { r *= .68; gg *= .66; b *= .66; }
       if (tn > 0) { r += (255 - r) * tn; gg += (255 - gg) * tn; b += (255 - b) * tn; }
       px[i] = r; px[i + 1] = gg; px[i + 2] = b;
@@ -452,22 +453,23 @@ window.Rig = (() => {
   };
   /* «Сессия»: огромный голем в тёмно-багровой броне с золотым ореолом — финальный босс по всем разделам */
   const SS = 1.3;
-  const session = {
+  const examBoss = (GC, BC, BK = .42) => ({
     sx: 52, D: (p) => 84 + 14 * p, w: 92,
     draw(P, g) {
       const bx = P.bx, inv = (w) => [bx + (w[0] - bx) / SS, w[1] / SS];
       const t = P.t;
-      glow(bx - 40, -170, 190, '#ff2a2a', .35 + .12 * Math.sin(t * 2.2) + (P.raged ? .15 : 0));
+      glow(bx - 40, -170, 190, GC, .35 + .12 * Math.sin(t * 2.2) + (P.raged ? .15 : 0));
       cx.save(); cx.translate(bx, 0); cx.scale(SS, SS); cx.translate(-bx, 0);
-      BT = .42; BTC = [165, 8, 28];
+      BT = BK; BTC = BC;
       const an = golem.draw(P, { gN: inv(g.gN), gF: inv(g.gF) });
       BT = 0;
       cx.restore();
       const sc = (w) => [bx + (w[0] - bx) * SS, w[1] * SS];
       return { body: sc(an.body), head: sc(an.head), mouth: sc(an.mouth) };
     }
-  };
-  const BOSS = { golem, dragon, scorpion, serpent, rival, session };
+  });
+  const session = examBoss('#ff2a2a', [165, 8, 28]), english = examBoss('#2a8cff', [40, 110, 255], .72);
+  const BOSS = { golem, dragon, scorpion, serpent, rival, session, english };
 
   /* P: { t, p, kickM, kickB, flashM, flashB, koM, koB, scars, shield, blockT, charge, turbo, raged, stun, hpFrac, introM, introB,
           key (правый боец: golem/dragon/scorpion/serpent/rival=бык), lkey (левый: 'bull' или босс), col, rcol, rscars } */

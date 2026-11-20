@@ -19,6 +19,9 @@
     99: { key: 'session', name: 'Сессия 1. Математика', color: '#ff3a4a', glow: 'rgba(255,60,80,.6)', front: 0.06, rate: 0.032, w: 0.46, cards: 16,
       start: 'Экзамен начинается. Все разделы, без шпаргалок.', rage: 'Это ещё не пересдача!',
       win: 'Встретимся на пересдаче.', die: 'Зачёт… поставлен…' },
+    98: { key: 'english', name: 'Экзамен по английскому', color: '#3aa0ff', glow: 'rgba(60,150,255,.6)', front: 0.06, rate: 0.03, w: 0.46, cards: 16,
+      start: 'Exam time! No dictionaries.', rage: 'Not bad… but not good enough!',
+      win: 'See you at the retake.', die: 'Well done… you passed…' },
     4: { key: 'serpent', name: 'Змей Бесконечности', color: '#b46bff', glow: 'rgba(170,90,255,.6)', front: 0.05, rate: 0.03, w: 0.42,
       start: 'Я бесконечен. А твоё терпение?', rage: 'Частные производные меня не остановят!',
       win: 'Бесконечность всегда побеждает.', die: 'Экстремум… найден…' }
@@ -723,7 +726,7 @@
   const SESSION = 99;
   const secs = () => Object.keys(window.BUILTIN_SECTIONS || {}).map(Number).filter((k) => BOSSES[k] && k !== SESSION).concat(S.cards.some((c) => sectionOf(c) === SESSION) ? [SESSION] : []);
   const scopeOf = (sec) => ({ t: 'sec', id: sec });
-  const secLabel = (sec) => sec === SESSION ? '300 вопросов сессии, все разделы' : `Раздел ${sec}. ${SEC_NAMES[sec]}`;
+  const secLabel = (sec) => sec === SESSION ? '300 вопросов сессии, все разделы' : sec === 98 ? '300 вопросов: грамматика и слова' : `Раздел ${sec}. ${SEC_NAMES[sec]}`;
   function bossInfo(sec) {
     const sc = scopeOf(sec), due = dueCards(sc).length, fresh = extraNewCards(sc).length, st = scopeStats(sc);
     return { sec, B: bossOf(sec), due, fresh, st, beaten: A.beat[sec] === today(), mode: due ? 'rev' : fresh ? 'new' : 'prac' };
@@ -811,7 +814,7 @@
   const norm = (t) => String(t).replace(/\s+/g, ' ').trim().toLowerCase();
   function options(c) {
     const ch = checkOf(c), right = ch ? ch[0] : c.a;
-    if (ch && sectionOf(c) === SESSION) return ch.slice(); // вопросы сессии: все 5 вариантов, как в билете
+    if (ch && sectionOf(c) >= 90) return ch.slice(); // вопросы сессии и английского: все 5 вариантов, как в билете
     const out = ch ? ch.slice(0, 4) : [right];
     if (out.length >= 4) return out;
     const used = new Set(out.map(norm)), L = right.length, math = /\$/.test(right);
