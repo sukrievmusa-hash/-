@@ -142,7 +142,7 @@
   /* ---------- частицы: искры, дым, огонь, шестерёнки, болты ---------- */
   const cv = $('#aFx'), cx = cv.getContext('2d');
   let parts = [], SW = 0, SH = 0;
-  function fitCanvas() { const r = stage.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1); SW = r.width; SH = r.height; cv.width = SW * d; cv.height = SH * d; cx.setTransform(d, 0, 0, d, 0, 0); chars.width = offC.width = tmpC.width = SW * d; chars.height = offC.height = tmpC.height = SH * d; SCL = SW / Rig.VW; FLR = SH * .93; }
+  function fitCanvas() { const r = stage.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1); if (r.width < 2 || r.height < 2) return; /* сцена скрыта: размер не трогаем */ SW = r.width; SH = r.height; cv.width = SW * d; cv.height = SH * d; cx.setTransform(d, 0, 0, d, 0, 0); chars.width = offC.width = tmpC.width = SW * d; chars.height = offC.height = tmpC.height = SH * d; SCL = SW / Rig.VW; FLR = SH * .93; }
   function burst(x, y, opt) {
     const o = Object.assign({ n: 26, colors: ['#fff6c2', '#ffd24a', '#ff8a1e'], speed: 7, life: 34, size: 3, grav: 0.25, kind: 'spark', dir: 0, spread: Math.PI * 2 }, opt);
     for (let i = 0; i < o.n && parts.length < 420; i++) {
@@ -366,7 +366,8 @@
     if (!F.ko && F.pt <= -1) F.duel ? duelWall(false) : wallHit();
     if (!F.ko && F.pt >= 1) F.duel ? duelWall(true) : bossWall();
     place();
-    if (performance.now() >= (F.freeze || 0)) drawChars(dt);
+    if (!chars.width || !chars.height || !offC.width || !offC.height) fitCanvas(); // холсты нулевого размера рисовать нельзя
+    if (chars.width && chars.height && offC.width && offC.height && performance.now() >= (F.freeze || 0)) drawChars(dt);
     emit(dt, (F.p - prev) / Math.max(dt, 1e-3));
     drawParts();
     raf = requestAnimationFrame(loop);

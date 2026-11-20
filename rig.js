@@ -109,7 +109,7 @@ window.Rig = (() => {
   function hslOf(h) { const [r, g, b] = hex(h).map((v) => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; let hh = 0; if (d) { hh = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; } return hh * 60; }
   function recolor(name, col, tint, tc, lite) {
     const key = [name, col, tint, tc, lite ? 1 : 0].join('|'); if (CACHE[key]) return CACHE[key];
-    const im = SPR[name], c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+    const im = SPR[name], c = document.createElement('canvas'); c.width = im.width || 1; c.height = im.height || 1; if (!im.width || !im.height) return c;
     const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0);
     const d = g.getImageData(0, 0, c.width, c.height), px = d.data, shift = hslOf(col) - 3;
     for (let i = 0; i < px.length; i += 4) {
@@ -237,7 +237,7 @@ window.Rig = (() => {
   Object.keys(GPART).forEach((k) => { const im = new Image(); im.onload = () => { SPR[k] = im; }; im.src = 'arena/' + GPART[k][2] + '.webp?v=1'; });
   function gimg(name, dark) { // оригинальные цвета + вспышка + затемнение дальней руки
     const tn = TINT > 0 ? Math.round(TINT * 6) / 6 : 0, bt = BT > 0 ? Math.round(BT * 20) / 20 : 0, key = ['g', name, dark ? 1 : 0, tn, bt, bt ? BTC.join(',') : ''].join('|'); if (CACHE[key]) return CACHE[key];
-    const im = SPR[name], c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+    const im = SPR[name], c = document.createElement('canvas'); c.width = im.width || 1; c.height = im.height || 1; if (!im.width || !im.height) return c;
     const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0);
     const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
     for (let i = 0; i < px.length; i += 4) {
