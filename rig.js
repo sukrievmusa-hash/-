@@ -93,7 +93,7 @@ window.Rig = (() => {
 
   /* ================= БЫК ================= */
   // координаты образца (px картинки) → сцена: начало у переднего копыта на полу
-  const K = .5, OX = 330, OY = 466, L = (x, y) => [(x - OX) * K, (y - OY) * K];
+  let K = .5; const OX = 330, OY = 466, L = (x, y) => [(x - OX) * K, (y - OY) * K];
   function bullPose(P) {
     const pr = P.p, k = P.kickM, t = P.t, str = .4 + Math.abs(pr);
     const lean = 2.5 * pr + 5 * k + Math.sin(t * 34) * str * .35;
@@ -473,6 +473,7 @@ window.Rig = (() => {
           key (правый боец: golem/dragon/scorpion/serpent/rival=бык), lkey (левый: 'bull' или босс), col, rcol, rscars } */
   function draw(ctx, P) {
     cx = ctx; PLANTS = []; OUTER = false; MIR = false;
+    K = P.key === 'dragon' ? .4 : .5; // против дракона бык мельче, дракон выглядит крупнее
     const B = BOSS[P.key] || golem, LK = P.lkey && P.lkey !== 'bull' && BOSS[P.lkey] !== rival ? BOSS[P.lkey] : null, S = bullPose(P);
     const gx = VW / 2 + P.p * 30;
     const jit = Math.sin(P.t * 41) * (.4 + Math.abs(P.p)) * .9; P.jit = jit;
