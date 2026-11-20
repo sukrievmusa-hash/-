@@ -525,3 +525,15 @@ button.primary,button.ghost,button.danger,.filebtn{border-radius:8px}
 
 .fimg{display:inline-block;max-width:100%;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}
 .opt .fimg,#gQ .fimg,#gA .fimg{margin:0 .05em}
+
+/* боссы сессий на главной */
+.sesscall{color:#eef1f8;background:radial-gradient(120% 90% at 50% 0,#1d2a4a,#0e1424);border:1px solid #2a3656}
+.sesscall .hk{font:900 italic 12px/1 system-ui;letter-spacing:.1em;color:#ffd24a;margin-bottom:4px}
+.sesscall .muted{color:#a9b3cb}
+.sesscall .srow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.sesscall .scard{display:flex;flex-direction:column;align-items:center;text-align:center;gap:3px;padding:10px 8px;border-radius:14px;background:radial-gradient(90% 70% at 50% 30%,var(--glow),transparent 75%),#141b2e;border:1px solid #2a3656}
+.sesscall .scard img{height:110px;max-width:100%;object-fit:contain;filter:drop-shadow(0 0 10px var(--glow))}
+.sesscall .scard b{font-size:15px;line-height:1.15}
+.sesscall .scard span{font-size:12px;color:#a9b3cb}
+.sesscall .fightbtn{width:100%;margin:6px 0 0;padding:9px;background:linear-gradient(180deg,#ffb02e,#e2700c);color:#2a1200;font-weight:900;font-size:15px;box-shadow:0 3px 0 #8a3f00;text-transform:uppercase}
+.sesscall .sharebtn{width:100%;margin:6px 0 0;padding:8px;color:#cfe0ff;border-color:#3a4a72;background:transparent;font-size:14px}

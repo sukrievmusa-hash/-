@@ -16,10 +16,10 @@
     3: { key: 'dragon', name: 'Дракон Пределов', color: '#ff5a2a', glow: 'rgba(255,80,40,.6)', front: 0.07, rate: 0.027, w: 0.42,
       start: 'Предел твоих знаний уже близок!', rage: 'Ты стремишься ко мне, но не достигнешь!',
       win: 'Предела нет. Как и твоей победы.', die: 'Производная… обнулилась…' },
-    99: { key: 'session', name: 'Сессия 1. Математика', color: '#ff3a4a', glow: 'rgba(255,60,80,.6)', front: 0.06, rate: 0.032, w: 0.46, cards: 16,
+    99: { key: 'session', name: 'Сессия 1. Математика', color: '#ff3a4a', glow: 'rgba(255,60,80,.6)', front: 0.06, rate: 0.032, w: 0.46, cards: 20,
       start: 'Экзамен начинается. Все разделы, без шпаргалок.', rage: 'Это ещё не пересдача!',
       win: 'Встретимся на пересдаче.', die: 'Зачёт… поставлен…' },
-    98: { key: 'english', name: 'Экзамен по английскому', color: '#3aa0ff', glow: 'rgba(60,150,255,.6)', front: 0.06, rate: 0.03, w: 0.46, cards: 16,
+    98: { key: 'english', name: 'Экзамен по английскому', color: '#3aa0ff', glow: 'rgba(60,150,255,.6)', front: 0.06, rate: 0.03, w: 0.46, cards: 20,
       start: 'Exam time! No dictionaries.', rage: 'Not bad… but not good enough!',
       win: 'See you at the retake.', die: 'Well done… you passed…' },
     4: { key: 'serpent', name: 'Змей Бесконечности', color: '#b46bff', glow: 'rgba(170,90,255,.6)', front: 0.05, rate: 0.03, w: 0.42,
@@ -436,8 +436,10 @@
     game.classList.add('arena'); stageWrap.hidden = false;
     game.classList.toggle('duelmode', !!DU); modsBox.hidden = !!DU;
     const chips = (box, list) => { box.textContent = ''; list.forEach((x) => { const c = el('span', 'dchip'); c.style.setProperty('--c', x.col); c.append(el('i', '', x.av), el('b', '', x.name)); box.append(c); }); };
-    if (DU) { chips($('#aMName'), [DU.me, ...DU.mates]); chips($('#aBName'), DU.foes); } else { $('#aMName').textContent = 'МЕХ-БЫК'; $('#aBName').textContent = B.name.toUpperCase(); }
+    const CO = g.arena.coop || null; F.coop = CO; F.team = { right: 0, wrong: 0, done: 0 };
+    if (DU) { chips($('#aMName'), [DU.me, ...DU.mates]); chips($('#aBName'), DU.foes); } else if (CO) { chips($('#aMName'), [CO.me, ...CO.mates]); $('#aBName').textContent = B.name.toUpperCase(); } else { $('#aMName').textContent = 'МЕХ-БЫК'; $('#aBName').textContent = B.name.toUpperCase(); }
     if (DU) { F.hpMax = F.hpLeft = 1; F.hold = Date.now() + 1800; }
+    if (CO) { F.hpMax = F.hpLeft = g.q.length * CO.n; } // общее здоровье босса на весь отряд
     bossEl.className = ''; me.className = '';
     $('#aBLag').style.width = '100%'; $('#aPLag').style.width = '100%';
     stage.querySelectorAll('.ftxt').forEach((n) => n.remove());
@@ -473,6 +475,7 @@
       F.crit = Date.now() - G.t0 < 6000 + 35 * c.q.length || (G.combo > 0 && (G.combo + 1) % 3 === 0);
       shove(F.crit);
     } else { bossSlam(); F.hurtShown = true; }
+    if (F.coop) F.coop.send({ t: right ? 'hit' : 'miss', crit: right && F.crit ? 1 : 0 });
     renderMods();
   }
   function shove(crit, amt) {
@@ -556,6 +559,33 @@
     setTimeout(() => { if (F) { anim(won ? me : bossEl, 'shove', 520); startFinale(won ? 'boss' : 'bull'); SFX.grind && SFX.grind(); } }, 250);
     setTimeout(() => { if (F) { banner(won ? 'ПОБЕДА!' : 'ПОРАЖЕНИЕ', won ? 'win' : 'lose', 1600); won ? SFX.win() : SFX.lose(); vib([40, 30, 40, 30, 120]); } }, 1950);
     setTimeout(go, 4300);
+  }
+  /* ---------- босс вместе ---------- */
+  function coopMsg(t, av, crit, won) { // что сделал друг из отряда
+    if (!F || !F.coop) return;
+    const x = contactX(), y = contactY();
+    if (t === 'left') { floatText(av + ' вышел', SW * .3, y - 90, 'turbo'); return; }
+    if (t === 'done') { F.team.done++; floatText(av + (won ? ' прошёл свои вопросы ✓' : ' выбыл'), SW * .3, y - 100, won ? 'critw' : 'turbo'); return; }
+    if (F.ko) return;
+    if (t === 'hit') {
+      F.team.right++; F.hpLeft = Math.max(1, F.hpLeft - 1); // добивает каждый сам, своими вопросами
+      F.pt = clamp(F.pt + (crit ? .22 : .15), -1.05, 1.05);
+      anim(me, 'charge', 500); anim(bossEl, 'pushed', 450); SFX.shove(); vib(15);
+      burst(x, y, { n: crit ? 30 : 18, speed: 7, size: 3 });
+      floatText(av + (crit ? ' КРИТ!' : ' −10'), x - SW * .18, y - 80, crit ? 'critw' : '');
+      setHp();
+    } else { F.team.wrong++; floatText(av + ' ошибся', x + 20, y - 70, 'turbo'); }
+  }
+  function coopQueue(sec, n) { // 20 своих карточек: сначала к повторению, потом новые, потом тренировка
+    if (sec === SESSION) return sessionQueue(n)[0];
+    const sc = scopeOf(sec), seen = new Set(), q = [];
+    const add = (list) => list.forEach((c) => { if (q.length < n && !seen.has(c.id)) { seen.add(c.id); q.push(c); } });
+    add(dueCards(sc)); add(S.cards.filter((c) => sectionOf(c) === sec && !c.seen)); add(shuffle(practiceCards(sc))); add(shuffle(S.cards.filter((c) => sectionOf(c) === sec)));
+    return q;
+  }
+  function coopFight(sec, q, C) {
+    hideHub();
+    launch(q, { practice: false, extra: false, scope: scopeOf(sec), size: q.length, arena: { sec, coop: C } });
   }
   /* быка дожали до стены */
   function wallHit() {
@@ -648,6 +678,7 @@
     $('.flash').classList.add('kofade');
     $('#aWarn').classList.remove('on');
     const won = g.hearts > 0;
+    if (F.coop && window.Duel) Duel.coopDone(won);
     const go = () => { if (G === g && !g.done) finish(); };
     if (won) {
       setTimeout(() => {
@@ -684,6 +715,10 @@
     [[dmg, 'урон'], ['+' + g.xp, 'XP' + (up ? ` · ур. ${lvl}` : '')], ['×' + g.bestCombo, 'комбо'], [g.right + '/' + (g.right + g.wrong), 'верно']]
       .forEach(([v, l]) => { const s = el('div', 'rs'); s.append(el('b', '', String(v)), el('span', '', l)); stats.append(s); });
     r.append(stats);
+    if (F && F.coop) {
+      const C = F.coop, tm = el('div', 'rsub', `Отряд: ${[C.me, ...C.mates].map((x) => x.av + ' ' + x.name).join(', ')} · друзья ответили верно ${F.team.right} раз`);
+      r.append(tm);
+    }
     if (won) {
       A.wins[sec] = (A.wins[sec] || 0) + 1; A.beat[sec] = today();
       const got = loot(g.wrong === 0 && !(F && F.scars));
@@ -695,7 +730,8 @@
       save();
     }
     const next = nextBoss(sec);
-    if (!won) { const b = el('button', 'primary', 'Реванш'); b.onclick = () => { closeGame(); fight(sec); }; r.append(b); }
+    if (g.arena.coop) { const b = el('button', 'primary', 'Ещё раз вместе'); b.onclick = () => { closeGame(); Duel.rematch(); }; r.append(b); }
+    else if (!won) { const b = el('button', 'primary', 'Реванш'); b.onclick = () => { closeGame(); fight(sec); }; r.append(b); }
     else if (next) { const b = el('button', 'primary', 'Следующий босс: ' + bossOf(next).name); b.onclick = () => { closeGame(); fight(next); }; r.append(b); }
     const hub = el('button', 'ghost', 'Все боссы'); hub.onclick = () => { closeGame(); openHub(); };
     const home = el('button', 'ghost', 'На главную'); home.onclick = closeGame;
@@ -738,7 +774,7 @@
       || all.filter((x) => x.fresh && !x.beaten)[0] || all.filter((x) => !x.beaten)[0] || all[0];
   }
   const sizeOf = (sec) => (BOSSES[sec] && BOSSES[sec].cards) || FIGHT;
-  const statusText = (x) => x.mode === 'rev' ? `${Math.min(sizeOf(x.sec), x.due)} карточек к бою` : x.mode === 'new' ? 'новые карточки' : 'тренировочный бой';
+  const statusText = (x) => x.sec >= 90 ? `${sizeOf(x.sec)} вопросов · ${x.mode === 'rev' ? 'повторение' : x.mode === 'new' ? 'новые' : 'тренировка'}` : x.mode === 'rev' ? `${Math.min(sizeOf(x.sec), x.due)} карточек к бою` : x.mode === 'new' ? 'новые карточки' : 'тренировочный бой';
   /* сессия: карточки из всех лекций вперемешку — сначала просроченные, потом новые, иначе тренировка */
   function sessionQueue(n) {
     const now = Date.now();
@@ -756,6 +792,7 @@
     if (!q.length) { q = practiceCards(sc); mode = 'prac'; }
     const n = sizeOf(sec);
     if (sec === SESSION) [q, mode] = sessionQueue(n);
+    else if (sec >= 90 && q.length < n) q = coopQueue(sec, n); // сессии: всегда полные 20 вопросов
     q = q.slice(0, n);
     if (!q.length) return;
     hideHub();
@@ -793,7 +830,7 @@
   const home = el('div', 'panel arenacall'); home.id = 'arenaHome';
   const tp = $('#taskPanel'); tp.parentNode.insertBefore(home, tp);
   function renderHome() {
-    if (!S.cards.length) { home.hidden = true; return; }
+    if (!S.cards.length) { home.hidden = true; if (typeof sessEl !== 'undefined') sessEl.hidden = true; return; }
     home.hidden = false;
     const x = bossOfDay(); if (!x) return;
     home.style.setProperty('--glow', x.B.glow);
@@ -804,9 +841,29 @@
     const go = el('button', 'primary fightbtn', x.beaten ? 'Ещё бой' : 'В бой');
     go.onclick = () => fight(x.sec);
     const all = el('button', 'linkbtn', 'Все боссы →'); all.onclick = openHub;
+    const tg = el('button', 'linkbtn', 'Пройти босса вместе 👥'); tg.onclick = () => window.Duel && Duel.openCoop(x.sec);
     const dl = el('button', 'linkbtn', 'Дуэль с другом ⚔'); dl.onclick = () => window.Duel && Duel.open();
-    t.append(go, all, dl);
+    t.append(go, tg, all, dl);
     home.append(im, t);
+    renderSess();
+  }
+  /* боссы сессий на главной: каждому по 20 вопросов, можно позвать друзей */
+  const sessEl = el('div', 'panel sesscall'); sessEl.id = 'sessHome';
+  home.after(sessEl);
+  function renderSess() {
+    const list = [SESSION, 98].filter((k) => BOSSES[k] && S.cards.some((c) => sectionOf(c) === k));
+    sessEl.hidden = !list.length; sessEl.innerHTML = ''; if (!list.length) return;
+    sessEl.append(el('div', 'hk', 'БОССЫ СЕССИЙ'), el('div', 'muted small', `По ${sizeOf(SESSION)} вопросов на человека. Позови друзей: у каждого свои ${sizeOf(SESSION)} вопросов, бьёте одного босса вместе.`));
+    const row = el('div', 'srow');
+    list.map(bossInfo).forEach((x) => {
+      const c = el('div', 'scard'); c.style.setProperty('--glow', x.B.glow);
+      const im = el('img'); im.src = `arena/${x.B.key}.webp?v=2`; im.alt = '';
+      const go = el('button', 'primary fightbtn', x.beaten ? 'Ещё бой' : 'В бой'); go.onclick = () => fight(x.sec);
+      const sh = el('button', 'ghost sharebtn', 'Поделиться 👥'); sh.onclick = () => window.Duel && Duel.openCoop(x.sec);
+      c.append(im, el('b', '', x.B.name), el('span', '', x.beaten ? 'Повержен сегодня ✓' : statusText(x)), go, sh);
+      row.append(c);
+    });
+    sessEl.append(row);
   }
   window.addEventListener('resize', () => { if (F) { fitCanvas(); place(); } });
 
@@ -829,6 +886,6 @@
     return out;
   }
 
-  window.Arena = { duelMsg, duelFinish, options, start, stop, onPick, onGrade, useShield, boost, beforeFinish, result, renderHome, openHub, fight, renderMods: () => F && renderMods(), _f: () => F };
+  window.Arena = { coopMsg, coopQueue, coopFight, bossOf, duelMsg, duelFinish, options, start, stop, onPick, onGrade, useShield, boost, beforeFinish, result, renderHome, openHub, fight, renderMods: () => F && renderMods(), _f: () => F };
   renderHome();
 })();

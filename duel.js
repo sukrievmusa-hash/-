@@ -15,6 +15,7 @@
   const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt'];
   const LIMIT = 240; // секунд на бой, потом решает положение быков
   const MAXP = 4;
+  const COOP_N = 20; // вопросов на человека в совместном бою с боссом
 
   /* ---------- профиль ---------- */
   const P = A.duel = A.duel || {};
@@ -72,7 +73,7 @@
   }
 
   /* ---------- состояние комнаты ---------- */
-  let net = null, room = '', isHost = false, list = [], sec = 0, peers = {}, teamOf = {}, hostSeen = 0, netState = 'off', timers = [], match = null, note = '';
+  let mode = 'duel', net = null, room = '', isHost = false, list = [], sec = 0, peers = {}, teamOf = {}, hostSeen = 0, netState = 'off', timers = [], match = null, note = '';
   const rc = () => Array.from({ length: 6 }, () => rnd('abcdefghjkmnpqrstuvwxyz23456789')).join('');
   const link = () => (window.MR_CONFIG && MR_CONFIG.site || location.origin + location.pathname) + '#duel=' + room;
   const every = (ms, f) => { const t = setInterval(f, ms); timers.push(t); return t; };
@@ -98,18 +99,18 @@
     const now = Date.now(), live = Object.values(peers).filter((x) => now - x.seen < 6000).map((x) => x.p), out = [];
     const all = [Object.assign(mine(), { host: 1 }), ...live].slice(0, MAXP);
     const cnt = [0, 0]; all.forEach((x) => { if (teamOf[x.id] != null) cnt[teamOf[x.id]]++; });
-    all.forEach((x) => { if (teamOf[x.id] == null) { teamOf[x.id] = cnt[0] <= cnt[1] ? 0 : 1; cnt[teamOf[x.id]]++; } out.push(Object.assign({}, x, { team: teamOf[x.id] })); });
+    all.forEach((x) => { if (teamOf[x.id] == null) { teamOf[x.id] = cnt[0] <= cnt[1] ? 0 : 1; cnt[teamOf[x.id]]++; } out.push(Object.assign({}, x, { team: mode === 'coop' ? 0 : teamOf[x.id] })); });
     const same = JSON.stringify(out) === JSON.stringify(list); list = out;
-    send({ t: 'room', sec, list });
+    send({ t: 'room', sec, list, mode });
     if (!same || force) renderRoom();
   }
 
   function onMsg(m) {
     if (!m || m.id === myId) return;
     if (m.t === 'hello' && isHost) { peers[m.id] = { p: m.p, seen: Date.now() }; rebuild(); }
-    else if (m.t === 'room' && !isHost) { hostSeen = Date.now(); list = m.list || []; sec = m.sec || sec; renderRoom(); }
+    else if (m.t === 'room' && !isHost) { hostSeen = Date.now(); list = m.list || []; sec = m.sec || sec; mode = m.mode === 'coop' ? 'coop' : 'duel'; renderRoom(); }
     else if (m.t === 'team' && isHost) { teamOf[m.id] = m.team; rebuild(true); }
-    else if (m.t === 'start' && !match) beginMatch(m.list, m.sec);
+    else if (m.t === 'start' && !match) { mode = m.mode === 'coop' ? 'coop' : 'duel'; beginMatch(m.list, m.sec); }
     else if (match) inMatch(m);
   }
 
@@ -119,6 +120,7 @@
     return right ? (crit ? 0.3 : 0.2) * f : -0.14 * f;
   }
   function beginMatch(l, s) {
+    if (mode === 'coop') return beginCoop(l, s);
     const meE = l.find((x) => x.id === myId); if (!meE) return;
     const mates = l.filter((x) => x.team === meE.team && x.id !== myId), foes = l.filter((x) => x.team !== meE.team);
     if (!foes.length) return;
@@ -140,6 +142,21 @@
     launch(q, { practice: false, extra: false, scope: sc, size: q.length, hearts: 99, arena: { sec: s, duel: D } });
     every(1000, tick); every(1200, () => { const f = Arena._f(); if (f) send({ t: 'sync', p: f.pt, tm: match.myTeam }); }); every(2000, () => send({ t: 'hb' }));
   }
+  /* совместный бой: все против босса, у каждого свои 20 вопросов, верные ответы друзей тоже бьют босса */
+  function beginCoop(l, s) {
+    const meE = l.find((x) => x.id === myId); if (!meE) return;
+    const mates = l.filter((x) => x.id !== myId);
+    sec = s;
+    const q = Arena.coopQueue(s, COOP_N);
+    if (!q.length) { note = 'В этой теме нет карточек'; renderRoom(); return; }
+    const C = { me: meE, mates, n: l.length, per: COOP_N, send: (o) => send(o) };
+    match = { coop: C, myTeam: 0, ended: false, seen: {}, left: {}, t0: Date.now(), list: l };
+    l.forEach((x) => { match.seen[x.id] = Date.now(); });
+    clearTimers(); hideLobby();
+    Arena.coopFight(s, q, C);
+    every(2000, () => send({ t: 'hb' }));
+    every(1000, () => { if (!match) return; const now = Date.now(); Object.keys(match.seen).forEach((id) => { if (id !== myId && !match.left[id] && now - match.seen[id] > 12000) { match.left[id] = 1; const w = match.list.find((x) => x.id === id); if (w) Arena.coopMsg('left', w.av + ' ' + w.name); } }); });
+  }
   function tick() {
     if (!match || match.ended) return;
     const left = Math.max(0, LIMIT - Math.floor((Date.now() - match.t0) / 1000));
@@ -159,6 +176,7 @@
   function inMatch(m) {
     if (match.seen[m.id] == null) return; match.seen[m.id] = Date.now();
     const who = match.list.find((x) => x.id === m.id); if (!who) return;
+    if (match.coop) { if (m.t === 'hit' || m.t === 'miss' || m.t === 'done') Arena.coopMsg(m.t, who.av, m.crit, m.won); else if (m.t === 'leave') { match.left[m.id] = 1; Arena.coopMsg('left', who.av + ' ' + who.name); } return; }
     if (m.t === 'push') Arena.duelMsg(m.d, m.crit, who.av, who.team === match.myTeam);
     else if (m.t === 'sync' && who.host) { const f = Arena._f(); if (f && !f.ko) f.pt += ((who.team === match.myTeam ? m.p : -m.p) - f.pt) * 0.5; }
     else if (m.t === 'end') endMatch(m.w, m.why, false);
@@ -216,6 +234,7 @@
 
   function renderRoom() {
     const c = $('#dlRoom'); if (box.hidden || !c) return;
+    setHead();
     const keep = c.querySelector('input.dl-code'), typing = keep && document.activeElement === keep;
     if (typing) return;
     c.innerHTML = '';
@@ -233,31 +252,32 @@
       if (note) c.append(el('div', 'dl-note', note));
       return;
     }
-    c.append(el('h3', '', isHost ? 'Твоя комната' : 'Комната друга'));
+    c.append(el('h3', '', mode === 'coop' ? (isHost ? 'Отряд против босса' : 'Отряд друга против босса') : isHost ? 'Твоя комната' : 'Комната друга'));
+    if (mode === 'coop') c.append(el('div', 'muted small', `${bossName(sec)}. Каждому по ${COOP_N} вопросов, свои карточки. Верные ответы друзей тоже бьют босса.`));
     if (netState !== 'ready') { c.append(el('div', 'dl-note', 'Подключаюсь к серверу…')); }
     const lb = el('div', 'dl-link'); lb.append(el('code', '', link()));
     const sh = el('button', 'primary', 'Поделиться ссылкой'); sh.onclick = share;
     c.append(lb, sh);
-    const teams = [0, 1].map((t) => list.filter((x) => x.team === t));
+    const teams = mode === 'coop' ? [list] : [0, 1].map((t) => list.filter((x) => x.team === t));
     const row = el('div', 'dl-teams');
     teams.forEach((tm, t) => {
-      const col = el('div', 'dl-team'); col.append(el('div', 'th', 'Команда ' + (t ? 'Б' : 'А')));
+      const col = el('div', 'dl-team'); col.append(el('div', 'th', mode === 'coop' ? 'Отряд' : 'Команда ' + (t ? 'Б' : 'А')));
       tm.forEach((x) => {
         const a = el('div', 'dl-pl'); a.style.setProperty('--c', x.col);
         const fi = el('img', 'fi'); fi.src = `arena/${x.fk || 'bull'}.webp?v=2`; fi.alt = ''; a.append(fi, el('i', '', x.av), el('b', '', x.name + (x.id === myId ? ' (ты)' : '')));
-        if (x.id === myId) { const sw = el('button', 'sw', '⇄'); sw.title = 'Сменить команду'; sw.onclick = () => { if (isHost) { teamOf[myId] = 1 - t; rebuild(true); } else send({ t: 'team', team: 1 - t }); }; a.append(sw); }
+        if (x.id === myId && mode !== 'coop') { const sw = el('button', 'sw', '⇄'); sw.title = 'Сменить команду'; sw.onclick = () => { if (isHost) { teamOf[myId] = 1 - t; rebuild(true); } else send({ t: 'team', team: 1 - t }); }; a.append(sw); }
         col.append(a);
       });
       if (!tm.length) col.append(el('div', 'muted small', 'пусто'));
       row.append(col);
     });
     c.append(row);
-    const ok = teams[0].length && teams[1].length;
+    const ok = mode === 'coop' ? list.length >= 2 : teams[0].length && teams[1].length;
     if (isHost) {
       const sel = el('select'); secs().forEach((k) => { const o = el('option', '', secTitle(k)); o.value = k; if (k === sec) o.selected = true; sel.append(o); });
       sel.onchange = () => { sec = +sel.value; rebuild(true); };
-      const go = el('button', 'primary', ok ? 'НАЧАТЬ БОЙ' : 'Ждём соперника…'); go.disabled = !ok;
-      go.onclick = () => { const l = list.slice(); [0, 250, 600].forEach((d) => setTimeout(() => send({ t: 'start', list: l, sec }), d)); beginMatch(l, sec); };
+      const go = el('button', 'primary', ok ? (mode === 'coop' ? 'В БОЙ ВМЕСТЕ' : 'НАЧАТЬ БОЙ') : mode === 'coop' ? 'Ждём друга…' : 'Ждём соперника…'); go.disabled = !ok;
+      go.onclick = () => { const l = list.slice(); [0, 250, 600].forEach((d) => setTimeout(() => send({ t: 'start', list: l, sec, mode }), d)); beginMatch(l, sec); };
       c.append(el('label', 'muted small', 'Тема боя'), sel, go);
       if (list.length < 2) c.append(el('div', 'muted small', 'Отправь ссылку другу: как только он зайдёт, он появится здесь.'));
     } else {
@@ -267,23 +287,37 @@
     if (note) c.append(el('div', 'dl-note', note));
   }
   async function share() {
-    const url = link(), text = 'Сыграем в дуэль быков по математике! Заходи по ссылке:';
-    if (navigator.share) { try { await navigator.share({ title: 'Дуэль быков', text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+    const url = link(), text = mode === 'coop' ? `Пройдём босса «${bossName(sec)}» вместе? Каждому по ${COOP_N} вопросов. Заходи:` : 'Сыграем в дуэль быков по математике! Заходи по ссылке:';
+    if (navigator.share) { try { await navigator.share({ title: mode === 'coop' ? 'Босс вместе' : 'Дуэль быков', text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
     try { await navigator.clipboard.writeText(url); } catch (e) { const t = el('textarea'); t.value = url; document.body.append(t); t.select(); try { document.execCommand('copy'); } catch (x) { /* нет прав */ } t.remove(); }
     const b = $('#dlRoom .primary'); if (b) { b.textContent = 'Ссылка скопирована ✓'; setTimeout(() => { if (b.isConnected) b.textContent = 'Поделиться ссылкой'; }, 1600); }
   }
-  function leave() { if (match && !match.ended) send({ t: 'leave' }); leaveNet(); hash(''); renderRoom(); }
+  function leave() { if (match && !match.ended) send({ t: 'leave' }); leaveNet(); hash(''); mode = 'duel'; renderRoom(); setHead(); }
+  const bossName = (k) => (Arena.bossOf ? Arena.bossOf(k).name : secTitle(k));
+  function openCoop(s) { // «Поделиться боссом»: сразу комната отряда и окно «поделиться»
+    if (!S.cards.length) return;
+    hideAllOverlays(); box.hidden = false; note = ''; renderProf();
+    if (match) return;
+    mode = 'coop'; sec = +s; connect(rc(), true); renderRoom(); setHead(); share();
+  }
+  let duelNote = '';
+  const setHead = () => {
+    const n = $('#duelLobby .hubnote'); if (!duelNote) duelNote = n.textContent;
+    $('#duelLobby h2').textContent = mode === 'coop' ? 'БОСС ВМЕСТЕ' : 'ДУЭЛЬ';
+    n.textContent = mode === 'coop' ? `Вы с друзьями против одного босса. У каждого свои ${COOP_N} вопросов: верный ответ бьёт босса у всех на экране, ошибка — босс толкает только тебя. Позови до трёх друзей по ссылке.` : duelNote;
+  };
   function open(code) {
     if (!S.cards.length) return;
+    if (!code && !room) mode = 'duel';
     hideAllOverlays();
     box.hidden = false; note = ''; renderProf();
     if (code && code !== room) connect(code, false);
-    renderRoom();
+    renderRoom(); setHead();
   }
   const hideAllOverlays = () => { const h = $('#arenaHub'); if (h) h.hidden = true; };
   function fromHash() { const m = /duel=([a-z0-9]+)/i.exec(location.hash); if (m && !match) open(m[1].toLowerCase()); }
   window.addEventListener('hashchange', fromHash);
   setTimeout(fromHash, 400);
 
-  window.Duel = { open, leave, onStop, rematch: () => { box.hidden = false; renderProf(); renderRoom(); } };
+  window.Duel = { open, openCoop, leave, onStop, coopDone: (won) => { send({ t: 'done', won: won ? 1 : 0 }); if (match) match.ended = true; }, rematch: () => { box.hidden = false; renderProf(); renderRoom(); setHead(); } };
 })();
