@@ -143,27 +143,29 @@ window.Rig = (() => {
     { n: 'frontS', J: [317, 404], F: [304, 466], s: 1.22, pair: 1, d0: -7, lite: true, PJ: [333, 418] },
   ];
   const FEET = {}, BACK = 11, FWD = 8, SWT = .2;
-  function feetUpdate(P, base) {
-    const sid = P.sid || 'l', st = FEET[sid] || (FEET[sid] = { bx: base, t: P.t, f: LEG4.map((L) => ({ d: L.d0, sw: null })) });
+  function feetUpdate(P, base, legs = LEG4, key = '', ko = P.koM > .2, px = (L) => MIR ? VW - (P.bx + L.wx) : P.bx + L.wx, ks = 1) {
+    const BK = BACK * ks, FW = FWD * ks;
+    const sid = (P.sid || 'l') + key, st = FEET[sid] || (FEET[sid] = { bx: base, t: P.t, f: legs.map((L) => ({ d: L.d0, sw: null })) });
     let dt = P.t - st.t, db = base - st.bx; st.t = P.t; st.bx = base;
     if (dt < 0 || dt > .5 || Math.abs(db) > 40) { dt = 0; db = 0; } // пауза вкладки или перескок — не дёргаем
-    const ko = P.koM > .2, spd = dt > 0 ? Math.abs(db) / dt : 0, swT = clamp(SWT / (1 + spd / 50), .06, SWT);
+    const spd = dt > 0 ? Math.abs(db) / dt : 0, swT = clamp(SWT / (1 + spd / 50), .06, SWT);
     st.f.forEach((f, i) => {
+      const L = legs[i];
       if (f.sw) { // шаг: копыто летит вперёд по дуге
         f.sw.u += dt / f.sw.T; f.sw.from -= db;
-        if (f.sw.u >= 1) { f.d = f.sw.to; f.sw = null; const L = LEG4[i]; PLANTS.push({ x: MIR ? VW - (P.bx + L.wx) : P.bx + L.wx, e: .35 }); }
+        if (f.sw.u >= 1) { f.d = f.sw.to; f.sw = null; PLANTS.push({ x: px(L), e: .35 }); }
         return;
       }
       if (db > 0) f.d -= db;                       // идёт вперёд: копыто стоит на полу
-      else if (db < 0 && Math.random() < Math.min(.6, -db * .5)) { const L = LEG4[i]; PLANTS.push({ x: MIR ? VW - (P.bx + L.wx) : P.bx + L.wx, e: Math.min(1, -db * .4) }); } // скользит назад
-      f.d = clamp(f.d, -BACK - 4, FWD + 4);
-      const busy = st.f.some((g, k) => g.sw && LEG4[k].pair === LEG4[i].pair) || st.f.filter((g) => g.sw).length >= 2;
-      if (!ko && f.d < -BACK && !busy) f.sw = { u: 0, from: f.d, to: FWD, T: swT };
+      else if (db < 0 && Math.random() < Math.min(.6, -db * .5)) PLANTS.push({ x: px(L), e: Math.min(1, -db * .4) }); // скользит назад
+      f.d = clamp(f.d, -BK - 4 * ks, FW + 4 * ks);
+      const busy = st.f.some((g, k) => g.sw && legs[k].pair === L.pair) || st.f.filter((g) => g.sw).length >= 2;
+      if (!ko && f.d < -BK && !busy) f.sw = { u: 0, from: f.d, to: FW, T: swT };
     });
     return st.f.map((f) => {
       if (!f.sw) return { d: f.d, lift: 0 };
       const u = f.sw.u, e = u * u * (3 - 2 * u);
-      return { d: f.sw.from + (f.sw.to - f.sw.from) * e, lift: Math.sin(Math.PI * u) * 9 };
+      return { d: f.sw.from + (f.sw.to - f.sw.from) * e, lift: Math.sin(Math.PI * u) * 9 * ks };
     });
   }
   function leg4(G, col, tf, ft) {
@@ -379,67 +381,66 @@ window.Rig = (() => {
     }
   };
 
-  /* ----- Скорпион Векторов ----- */
+  /* ----- Скорпион Векторов: тело, клешни и ноги из картинки пользователя ----- */
+  const SK = .37, SCS = 1.35, SOX = 447, SOY = 470, SSH = [447, 390], STIP = [262, 392]; // масштаб, точка отсчёта (плечо, пол), плечо клешни и точка хвата на листе
+  const SPART = { scbody: [333, 81, 'sc_body'], scclaw: [185, 316, 'sc_claw'], scshA: [438, 398, 'sc_shA'], scshC: [573, 383, 'sc_shC'], scshD: [698, 378, 'sc_shD'], sclA: [449, 356, 'sc_lA'], sclB: [459, 435, 'sc_lB'], sclC: [548, 305, 'sc_lC'] };
+  Object.keys(SPART).forEach((k) => { const im = new Image(); im.onload = () => { SPR[k] = im; }; im.src = 'arena/' + SPART[k][2] + '.webp?v=4'; });
+  const SL = (x, y) => [(SOX - x) * SK, (y - SOY) * SK]; // точка листа → локальные координаты (вперёд — вправо, пол y=0)
+  // Ближние ноги: на теле запечено бедро, отдельно крутится голень вокруг колена. Дальние ноги целиком, тёмные, позади тела.
+  // pair — очерёдность шагов: соседние ноги шагают по очереди (в одной паре одновременно только одна).
+  const SLEGS = [
+    { far: 1, n: 'sclA', hip: [520, 372], hs: [530, 369], ft: [467, 457], fx: 452, pair: 0, d0: -4 },
+    { far: 0, n: 'scshA', knee: [511, 420], ft: [467, 457], pair: 1, d0: 1 },
+    { far: 1, n: 'sclB', hip: [560, 372], hs: [545, 447], ft: [477, 530], fx: 497, pair: 0, d0: -2 },
+    { far: 0, n: 'scshC', knee: [621, 400], ft: [592, 457], pair: 1, d0: 2 },
+    { far: 1, n: 'sclC', hip: [640, 338], hs: [595, 324], ft: [592, 457], fx: 640, pair: 0, d0: -3 },
+    { far: 1, n: 'sclC', hip: [702, 338], hs: [595, 324], ft: [592, 457], fx: 700, pair: 1, d0: 0 },
+    { far: 0, n: 'scshD', knee: [726, 395], ft: [752, 457], pair: 0, d0: -1 },
+  ];
+  function sleg(G, tf, ft) {
+    if (!SPR[G.n]) return;
+    const pt = SPART[G.n], fl = SL(G.ft[0], G.ft[1]);
+    let p0, sv, tx, ty;
+    if (G.far) { p0 = tf(...SL(G.hip[0], G.hip[1])); sv = [fl[0] - SL(G.hs[0], G.hs[1])[0], fl[1] - SL(G.hs[0], G.hs[1])[1]]; tx = SL(G.fx, 470)[0] + ft.d; }
+    else { p0 = tf(...SL(G.knee[0], G.knee[1])); const k = SL(G.knee[0], G.knee[1]); sv = [fl[0] - k[0], fl[1] - k[1]]; tx = fl[0] + ft.d; }
+    ty = -ft.lift;
+    const v = [tx - p0[0], ty - p0[1]], st = clamp(Math.hypot(v[0], v[1]) / Math.hypot(sv[0], sv[1]), .86, 1.14), pv = G.far ? G.hs : G.knee;
+    cx.save(); cx.translate(p0[0], p0[1]); cx.rotate(Math.atan2(v[1], v[0])); cx.scale(st, 1); cx.rotate(-Math.atan2(sv[1], sv[0])); cx.scale(-SK, SK);
+    cx.drawImage(gimg(G.n, !!G.far), pt[0] - pv[0], pt[1] - pv[1]); cx.restore();
+    G.wx = tx;
+  }
   const scorpion = {
-    sx: 40, D: (p) => 32 + 8 * p, w: 70,
+    sx: 22, D: (p) => 36 + 8 * p, w: 140,
     draw(P, g) {
       const t = P.t, bp = -P.p, k = P.kickB;
-      const lean = -2 + 4 * bp + 4 * k - 4 * P.stun + Math.sin(t * 27) * (.4 + Math.abs(bp)) * .8;
-      const dip = Math.max(0, -bp) * 4;
-      const tf = leanTf(20, lean, dip), ST = '#3f4a62', OR = '#ffb347';
+      const lean = -1 + 2 * bp + 3 * k - 3 * P.stun + Math.sin(t * 27) * (.2 + Math.abs(bp)) * .5;
+      const dip = Math.max(0, -bp) * 3 + Math.sin(t * 15) * .3;
+      const tf = leanTf(0, lean, dip);
       cx.save(); cx.translate(P.bx, 0); FLIP = true; cx.scale(-1, 1);
-      shadow(-10, 88);
+      shadow(-52, 118);
       if (P.koB) { cx.translate(-30, P.koB * 14); cx.rotate(-rad(P.koB * 26)); cx.translate(30, 0); cx.globalAlpha = 1 - .5 * P.koB; }
       TINT = P.flashB * .85; TC = [255, 255, 255];
       const loc = (w) => [P.bx - w[0], w[1]];
-      const legs = (far) => {
-        [-34, -18, -2, 14].forEach((hx, i) => {
-          const h = tf(hx + (far ? -4 : 0), -44), fx = hx + [-30, -14, 8, 26][i] + (far ? -6 : 0);
-          const effB = .5 + 1.1 * k + .45 * Math.abs(bp), [sdx, lf] = P.koB > .2 ? [0, 0] : stepFoot((P.sid || 'r') + 's' + i + (far ? 'f' : 'n'), (i % 2) * .5 + (far ? .25 : 0), t * 1.4, effB, 7 + 7 * effB, P.bx - fx);
-          const [kn, ft] = ik(h, [fx + sdx, -lf * .6], 26, 34, -1);
-          limb(h, kn, far ? 7 : 9, far ? '#2e3648' : ST, false); limb(kn, ft, far ? 5 : 7, far ? '#2e3648' : '#55607a', false);
-          if (!far) { cx.beginPath(); cx.arc(kn[0], kn[1], 2.6, 0, 7); cx.fillStyle = C(OR); cx.fill(); }
-        });
+      const FT = feetUpdate(P, -(P.bx + (P.jit || 0)), SLEGS, 'sc', P.koB > .2, (L) => { const x = P.bx - (L.wx || 0); return MIR ? VW - x : x; }, .5);
+      const claw = (T, far) => { // клешня: поворот вокруг плеча и растяжение до рога
+        if (!SPR.scclaw) return;
+        const S = tf(...SL(SSH[0] + (far ? 6 : 0), SSH[1] - (far ? 4 : 0))), tp = SL(STIP[0], STIP[1]), sh = SL(SSH[0], SSH[1]);
+        const sv = [(tp[0] - sh[0]) * SCS, (tp[1] - sh[1]) * SCS], v = [T[0] - S[0], T[1] - S[1]], st = clamp(Math.hypot(v[0], v[1]) / Math.hypot(sv[0], sv[1]), .8, 1.22);
+        cx.save(); cx.translate(S[0], S[1]); cx.rotate(Math.atan2(v[1], v[0])); cx.scale(st, 1); cx.rotate(-Math.atan2(sv[1], sv[0])); cx.scale(-SK * SCS, SK * SCS);
+        cx.drawImage(gimg('scclaw', far), SPART.scclaw[0] - SSH[0], SPART.scclaw[1] - SSH[1]); cx.restore();
       };
-      legs(true);
-      // хвост
-      const R = tf(-62, -60), sway = Math.sin(t * 2.6) * 8, strike = k;
-      const c1 = [-118, -80], c2 = [-112 + strike * 40, -200 + sway], tip = [-34 + strike * 96 + sway, -178 + strike * 52];
-      const segs = [];
-      for (let i = 0; i <= 7; i++) { const u = i / 7, a = (1 - u) ** 3, b = 3 * u * (1 - u) ** 2, c = 3 * u * u * (1 - u), d = u ** 3; segs.push([a * R[0] + b * c1[0] + c * c2[0] + d * tip[0], a * R[1] + b * c1[1] + c * c2[1] + d * tip[1]]); }
-      for (let i = 0; i < 7; i++) { limb(segs[i], segs[i + 1], 15 - i * 1.2, ST); cx.beginPath(); cx.arc(segs[i + 1][0], segs[i + 1][1], 3, 0, 7); cx.fillStyle = C(OR); cx.fill(); }
-      const sa = Math.atan2(tip[1] - segs[6][1], tip[0] - segs[6][0]);
-      cx.save(); cx.translate(tip[0], tip[1]); cx.rotate(sa + .9);
-      poly([[0, -10], [26, 0], [0, 10], [6, 0]]); shape(C(OR, .1), 2.4); glow(12, 0, 26, '#ff9a2e', .7);
-      cx.restore();
+      // дальние ноги и дальняя клешня позади тела
+      SLEGS.forEach((G, i) => { if (G.far) sleg(G, tf, FT[i]); });
+      claw(loc(g.gF), true); claw(loc(g.gN), false);
       // тело
-      bodyStart(20, lean, dip);
-      [[-70, -60, 14], [-52, -62, 16]].forEach(([x, y, r]) => { blob([[x - r, y + 6], [x - r + 3, y - 10], [x + r, y - 12], [x + r + 2, y + 6], [x, y + 14]]); shape(vg(y - 14, y + 14, ST)); });
-      const body = [[-44, -56], [-34, -80], [8, -88], [42, -76], [56, -56], [42, -40], [0, -36], [-38, -42]];
-      blob(body); shape(vg(-88, -36, ST, .35, .45));
-      cx.strokeStyle = C(OR); cx.lineWidth = 3; cx.beginPath(); cx.moveTo(-30, -74); cx.quadraticCurveTo(10, -86, 40, -72); cx.stroke(); glow(6, -80, 30, '#ff9a2e', .25);
-      [[-20, -62], [4, -66], [28, -60]].forEach(([x, y]) => { poly([[x - 8, y], [x, y - 12], [x + 8, y]]); shape(C('#55607a'), 1.6); });
-      lamp(46, -62, 3.2, '#ff2a20'); lamp(52, -56, 2.6, '#ff2a20');
-      poly([[50, -50], [60, -46], [52, -42]]); shape(C('#cfd6e4'), 1.4);
-      if (P.hpFrac < .5) glow(10, -60, 16, '#ff5a2a', .6);
+      bodyStart(0, lean, dip); cx.scale(-SK, SK); cx.translate(-SOX, -SOY);
+      if (SPR.scbody) cx.drawImage(gimg('scbody', false), SPART.scbody[0], SPART.scbody[1]);
+      if (P.hpFrac < .5) { glow(520, 290, 40, '#ff5a2a', .5); }
       cx.restore();
-      legs(false);
-      // клешни
-      const claw = (S, T, far) => {
-        const [el, hd] = ik(S, T, 40, 44, -1);
-        limb(S, el, far ? 11 : 14, far ? '#2e3648' : ST); limb(el, hd, far ? 12 : 15, far ? '#2e3648' : '#4b5670');
-        disc(el[0], el[1], 6, '#55607a');
-        const a = Math.atan2(hd[1] - el[1], hd[0] - el[0]), open = .5 + .25 * Math.sin(t * 3) - .35 * k;
-        cx.save(); cx.translate(hd[0], hd[1]); cx.rotate(a);
-        cx.beginPath(); cx.moveTo(-10, 0); cx.arc(-10, 0, 20, open, Math.PI * 2 - open); cx.closePath(); shape(vg(-20, 20, far ? '#2e3648' : '#4b5670'));
-        cx.strokeStyle = C(OR); cx.lineWidth = 3; cx.beginPath(); cx.arc(-10, 0, 14, open + .15, Math.PI * 2 - open - .15); cx.stroke();
-        glow(4, 0, 16, '#ff9a2e', .5);
-        cx.restore();
-      };
-      claw(tf(36, -60), loc(g.gF), true);
-      claw(tf(44, -54), loc(g.gN), false);
+      // ближние ноги (голени) и ближняя клешня поверх тела
+      SLEGS.forEach((G, i) => { if (!G.far) sleg(G, tf, FT[i]); });
       TINT = 0; FLIP = false; cx.restore();
-      return { body: [P.bx, -60], head: [P.bx - 46, -62], mouth: [P.bx - tip[0], tip[1]] };
+      return { body: [P.bx + 60, -45], head: [P.bx - 20, -70], mouth: [P.bx + 30, -125] };
     }
   };
 
@@ -517,7 +518,7 @@ window.Rig = (() => {
     cx = ctx; PLANTS = []; OUTER = false; MIR = false;
     const B = BOSS[P.key] || golem, LK = P.lkey && P.lkey !== 'bull' && BOSS[P.lkey] !== rival ? BOSS[P.lkey] : null, S = bullPose(P);
     const gx = VW / 2 + P.p * 30;
-    const jit = Math.sin(P.t * 41) * (.4 + Math.abs(P.p)) * .9;
+    const jit = Math.sin(P.t * 41) * (.4 + Math.abs(P.p)) * .9; P.jit = jit;
     const fall = { gN: [gx - 6, -125], gF: [gx - 2, -118] }; // куда тянутся руки, если напротив не бык с рогами
     let an, la, gw;
     // ----- левый боец -----
