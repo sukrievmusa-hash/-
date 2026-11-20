@@ -75,7 +75,7 @@
     const cid = 'mr' + Math.random().toString(36).slice(2, 10), seenN = new Set(), order = [];
     let closed = false, last = 'connecting';
     const recv = (m) => { // одно и то же сообщение приходит от нескольких брокеров: берём первое
-      if (m && m.n) { if (seenN.has(m.n)) return; seenN.add(m.n); order.push(m.n); if (order.length > 400) seenN.delete(order.shift()); }
+      if (m && m._u) { if (seenN.has(m._u)) return; seenN.add(m._u); order.push(m._u); if (order.length > 400) seenN.delete(order.shift()); }
       if (!closed) onMsg(m);
     };
     const state = () => { const s = links.some((l) => l.ready) ? 'ready' : 'connecting'; if (s !== last) { last = s; if (!closed) onState(s); } };
@@ -83,7 +83,7 @@
     const links = brokers.map((u, i) => Link(u, topic, cid + i, recv, state));
     return {
       send(o) {
-        const bytes = pkt(0x30, [...str(topic), ...enc.encode(JSON.stringify(Object.assign({ n: Math.random().toString(36).slice(2, 10) }, o)))]);
+        const bytes = pkt(0x30, [...str(topic), ...enc.encode(JSON.stringify(Object.assign({ _u: Math.random().toString(36).slice(2, 10) }, o)))]);
         let ok = false; links.forEach((l) => { if (l.put(bytes)) ok = true; }); return ok;
       },
       close() { closed = true; links.forEach((l) => l.close()); },
