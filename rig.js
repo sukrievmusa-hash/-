@@ -137,36 +137,37 @@ window.Rig = (() => {
     const tn = TINT > 0 ? Math.round(TINT * 6) / 6 : 0, c = recolor(name, col, dark ? 1 : 0, tn, TC);
     cx.save(); cx.translate(x, y); cx.rotate(ang); cx.scale(sc, sc * mir); cx.drawImage(c, -px, -py); cx.restore();
   }
-  // ноги: две части (бедро и голень), режем спрайт по колену и ставим по IK
+  // ноги: три части — бедро, голень и копыто (копыто всегда стоит на полу плоско), режем спрайт по колену и лодыжке
   const LEGS = {
-    legf: { H: [27, 22], K: [51, 83], F: [95, 133], sc: .85 },
-    legh: { H: [30, 26], K: [28, 85], F: [33, 133], sc: .95 },
+    legf: { H: [27, 22], K: [51, 83], A: [93, 121], F: [97, 134], sc: .85, tilt: -.25 },
+    legh: { H: [30, 26], K: [28, 85], A: [33, 120], F: [33, 133], sc: .95, tilt: 0 },
   };
+  function half(g, P0, u, side) { // оставить полуплоскость по одну сторону от линии, перпендикулярной u и проходящей через P0
+    const n = [-u[1], u[0]], B = 500, d = [u[0] * B * side, u[1] * B * side];
+    g.beginPath(); g.moveTo(P0[0] + n[0] * B, P0[1] + n[1] * B); g.lineTo(P0[0] - n[0] * B, P0[1] - n[1] * B);
+    g.lineTo(P0[0] - n[0] * B + d[0], P0[1] - n[1] * B + d[1]); g.lineTo(P0[0] + n[0] * B + d[0], P0[1] + n[1] * B + d[1]); g.closePath(); g.clip();
+  }
   function legPiece(name, col, dark, tint, tc, part) {
     const key = ['leg', name, col, dark, tint, tc, part].join('|'); if (CACHE[key]) return CACHE[key];
     const src = recolor(name, col, dark, tint, tc), Lg = LEGS[name], c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
-    const g = c.getContext('2d'), ax = [Lg.K[0] - Lg.H[0], Lg.K[1] - Lg.H[1]], al = Math.hypot(ax[0], ax[1]), u = [ax[0] / al, ax[1] / al];
-    g.save(); g.beginPath();
-    // полуплоскость, перпендикулярная кости, через колено (нижняя часть захватывает диск колена целиком)
-    const off = part ? -15 : 0, P0 = [Lg.K[0] + u[0] * off, Lg.K[1] + u[1] * off], n = [-u[1], u[0]], B = 400;
-    const dir = part ? 1 : -1;
-    g.moveTo(P0[0] + n[0] * B, P0[1] + n[1] * B); g.lineTo(P0[0] - n[0] * B, P0[1] - n[1] * B);
-    g.lineTo(P0[0] - n[0] * B + u[0] * B * dir, P0[1] - n[1] * B + u[1] * B * dir); g.lineTo(P0[0] + n[0] * B + u[0] * B * dir, P0[1] + n[1] * B + u[1] * B * dir);
-    g.closePath(); g.clip(); g.drawImage(src, 0, 0); g.restore();
+    const g = c.getContext('2d'), nrm = (v) => { const l = Math.hypot(v[0], v[1]); return [v[0] / l, v[1] / l, l]; };
+    const u1 = nrm([Lg.K[0] - Lg.H[0], Lg.K[1] - Lg.H[1]]), u2 = nrm([Lg.A[0] - Lg.K[0], Lg.A[1] - Lg.K[1]]);
+    g.save();
+    if (part === 0) half(g, Lg.K, u1, -1);
+    else if (part === 1) { half(g, [Lg.K[0] - u1[0] * 15, Lg.K[1] - u1[1] * 15], u1, 1); half(g, Lg.A, u2, -1); }
+    else half(g, [Lg.A[0] - u2[0] * 9, Lg.A[1] - u2[1] * 9], u2, 1);
+    g.drawImage(src, 0, 0); g.restore();
     return (CACHE[key] = c);
   }
-  function drawLeg(name, col, dark, h, kn, ft) {
+  function drawLeg(name, col, dark, h, kn, an) {
     const Lg = LEGS[name]; if (!SPR[name]) return;
-    const tn = TINT > 0 ? Math.round(TINT * 6) / 6 : 0, sc = Lg.sc;
-    const up = legPiece(name, col, dark ? 1 : 0, tn, TC, 0), lo = legPiece(name, col, dark ? 1 : 0, tn, TC, 1);
-    const sU = Math.atan2(Lg.K[1] - Lg.H[1], Lg.K[0] - Lg.H[0]), sL = Math.atan2(Lg.F[1] - Lg.K[1], Lg.F[0] - Lg.K[0]);
-    const cross = (Lg.F[0] - Lg.H[0]) * (Lg.K[1] - Lg.H[1]) - (Lg.F[1] - Lg.H[1]) * (Lg.K[0] - Lg.H[0]);
-    const cr2 = (ft[0] - h[0]) * (kn[1] - h[1]) - (ft[1] - h[1]) * (kn[0] - h[0]);
-    const mir = 1;
-    const aU = Math.atan2(kn[1] - h[1], kn[0] - h[0]), aL = Math.atan2(ft[1] - kn[1], ft[0] - kn[0]);
-    const put = (img, px, py, x, y, a, sa) => { cx.save(); cx.translate(x, y); cx.rotate(a); cx.scale(sc, sc * mir); cx.rotate(-sa); cx.drawImage(img, -px, -py); cx.restore(); };
-    put(up, Lg.H[0], Lg.H[1], h[0], h[1], aU, sU);
-    put(lo, Lg.K[0], Lg.K[1], kn[0], kn[1], aL, sL);
+    const tn = TINT > 0 ? Math.round(TINT * 6) / 6 : 0, sc = Lg.sc, dk = dark ? 1 : 0;
+    const sU = Math.atan2(Lg.K[1] - Lg.H[1], Lg.K[0] - Lg.H[0]), sL = Math.atan2(Lg.A[1] - Lg.K[1], Lg.A[0] - Lg.K[0]);
+    const aU = Math.atan2(kn[1] - h[1], kn[0] - h[0]), aL = Math.atan2(an[1] - kn[1], an[0] - kn[0]);
+    const put = (img, px, py, x, y, a, sa) => { cx.save(); cx.translate(x, y); cx.rotate(a); cx.scale(sc, sc); cx.rotate(-sa); cx.drawImage(img, -px, -py); cx.restore(); };
+    put(legPiece(name, col, dk, tn, TC, 0), Lg.H[0], Lg.H[1], h[0], h[1], aU, sU);
+    put(legPiece(name, col, dk, tn, TC, 1), Lg.K[0], Lg.K[1], kn[0], kn[1], aL, sL);
+    put(legPiece(name, col, dk, tn, TC, 2), Lg.A[0], Lg.A[1], an[0], an[1], Lg.tilt, 0);
   }
   function bullHead(P, S) { // голова в системе шеи (0,0): тянется к рогам
     const sc = .66; spr('head', P.col || '#2f7dff', false, 35, 135, 0, 6, sc, 0, 1);
@@ -183,10 +184,9 @@ window.Rig = (() => {
     const eff = .45 + 1.1 * P.kickM + .45 * Math.abs(pr), amp = 9 + 14 * eff, sid = P.sid || 'l', OFF = [0, .5, .25, .75];
     const leg = (L, i) => {
       const [hx, hy, fx, dir, far] = L, h = tf(hx, hy), [sdx, lf] = P.koM > .2 ? [0, 0] : stepFoot(sid + 'b' + i, OFF[i], t, eff, amp, P.bx + fx);
-      const nm = dir > 0 ? 'legh' : 'legf', Lg = LEGS[nm], l1 = Math.hypot(Lg.K[0] - Lg.H[0], Lg.K[1] - Lg.H[1]) * Lg.sc, l2 = Math.hypot(Lg.F[0] - Lg.K[0], Lg.F[1] - Lg.K[1]) * Lg.sc;
-      const tg = [fx + sdx, -lf], Lg2 = LEGS[nm], sgn = (Lg2.F[0] - Lg2.H[0]) * (Lg2.K[1] - Lg2.H[1]) - (Lg2.F[1] - Lg2.H[1]) * (Lg2.K[0] - Lg2.H[0]);
-      let [kn, ft] = ik(h, tg, l1, l2, dir);
-      if (((ft[0] - h[0]) * (kn[1] - h[1]) - (ft[1] - h[1]) * (kn[0] - h[0]) > 0) !== (sgn > 0)) [kn, ft] = ik(h, tg, l1, l2, -dir); // колено гнётся так же, как нарисовано, копыто смотрит вперёд
+      const nm = dir > 0 ? 'legh' : 'legf', Lg = LEGS[nm], l1 = Math.hypot(Lg.K[0] - Lg.H[0], Lg.K[1] - Lg.H[1]) * Lg.sc, l2 = Math.hypot(Lg.A[0] - Lg.K[0], Lg.A[1] - Lg.K[1]) * Lg.sc;
+      const tg = [fx + sdx - (Lg.F[0] - Lg.A[0]) * Lg.sc, -lf - (Lg.F[1] - Lg.A[1]) * Lg.sc];
+      const [kn, ft] = ik(h, tg, l1, l2, dir);
       drawLeg(nm, BLUE, far, h, kn, ft);
     };
     leg(legs[0], 0); leg(legs[1], 1);
@@ -194,6 +194,11 @@ window.Rig = (() => {
     cx.save(); cx.translate(PIV[0], dip); cx.rotate(rad(lean)); cx.translate(-PIV[0], 0);
     const sw = Math.sin(t * 5) * 6 - pr * 5;
     spr('tail', BLUE, false, 100, 28, -56, -106, .42, -rad(40 - sw * 1.2), 1);
+    // голова
+    cx.save(); cx.translate(N[0], N[1]); cx.rotate(rad(ha));
+    bullHead(P, S);
+    glow(30, -14, 12, '#ffb02e', .55 + .3 * Math.sin(t * 8));
+    cx.restore();
     spr('torso', BLUE, false, 0, 169, -64, -60, .6, 0, 1);
     // повреждения
     if (sc >= 1) {
@@ -211,11 +216,6 @@ window.Rig = (() => {
     const wx = 30, wy = -96, wsp = t * (4 + 14 * Math.abs(pr) + 10 * P.kickM);
     spr('gear', '#ffffff', false, 26.5, 26.5, wx, wy, .4, wsp, 1);
     glow(wx, wy, 24, P.turbo ? '#ff8a1e' : '#4fd2ff', .4 + .3 * Math.abs(Math.sin(t * 6))); lamp(wx, wy, 3.5, P.turbo ? '#ffb02e' : '#9ff0ff');
-    // голова
-    cx.save(); cx.translate(N[0], N[1]); cx.rotate(rad(ha));
-    bullHead(P, S);
-    glow(30, -14, 12, '#ffb02e', .55 + .3 * Math.sin(t * 8));
-    cx.restore();
     cx.restore();
     leg(legs[2], 2); leg(legs[3], 3);
     TINT = 0;
