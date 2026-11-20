@@ -673,7 +673,7 @@
     const dmg = F ? F.dmg : 0;
     grindOff();
     r.classList.add('aresult', won ? 'won' : 'lost'); stageWrap.hidden = true;
-    const art = el('div', 'rart'); const im = el('img'); im.src = `arena/${won ? B.key : 'bull'}.webp`; art.append(im);
+    const art = el('div', 'rart'); const im = el('img'); im.src = `arena/${won ? B.key : 'bull'}.webp?v=2`; art.append(im);
     const h = el('h2', 'rtitle', won ? 'ПОБЕДА!' : 'ПОРАЖЕНИЕ');
     const sub = el('div', 'rsub', won ? `${B.name} повержен` : `${B.name} дожал. Ничего не потеряно: карточки, где вы ошиблись, вернутся раньше`);
     r.append(art, h, sub);
@@ -687,7 +687,7 @@
       const lb = el('div', 'rloot');
       lb.append(el('div', 'muted small', got.length > 1 ? 'Без единой ошибки: двойная награда' : 'Награда'));
       const row = el('div', 'lrow');
-      got.forEach((k, i) => { const it = el('div', 'litem'); it.style.animationDelay = (0.3 + i * 0.25) + 's'; const ii = el('img'); ii.src = `arena/${k}.webp`; it.append(ii, el('span', '', MODS[k].name)); row.append(it); });
+      got.forEach((k, i) => { const it = el('div', 'litem'); it.style.animationDelay = (0.3 + i * 0.25) + 's'; const ii = el('img'); ii.src = `arena/${k}.webp?v=2`; it.append(ii, el('span', '', MODS[k].name)); row.append(it); });
       lb.append(row); r.append(lb);
       save();
     }
@@ -771,7 +771,7 @@
     const grid = $('#hubGrid'); grid.innerHTML = '';
     secs().map(bossInfo).forEach((x) => {
       const b = el('button', 'bcard ' + x.B.key + (x.beaten ? ' beaten' : '')); b.style.setProperty('--glow', x.B.glow);
-      const im = el('img'); im.src = `arena/${x.B.key}.webp`; im.alt = '';
+      const im = el('img'); im.src = `arena/${x.B.key}.webp?v=2`; im.alt = '';
       b.append(im, el('b', '', x.B.name), el('span', 'bs', secLabel(x.sec)), el('span', 'bst' + (x.mode === 'rev' ? ' due' : ''), x.beaten ? 'Повержен сегодня ✓' : statusText(x)));
       if (A.wins[x.sec]) b.append(el('span', 'bw', `побед: ${A.wins[x.sec]}`));
       b.onclick = () => fight(x.sec);
@@ -779,7 +779,7 @@
     });
     const mb = $('#hubMods'); mb.innerHTML = '';
     Object.entries(MODS).forEach(([k, m]) => {
-      const r = el('div', 'hmod'); const im = el('img'); im.src = `arena/${k}.webp`;
+      const r = el('div', 'hmod'); const im = el('img'); im.src = `arena/${k}.webp?v=2`;
       const t = el('div'); t.append(el('b', '', `${m.name} ×${A.items[k] || 0}`), el('span', 'muted small', m.what));
       r.append(im, t); mb.append(r);
     });
@@ -795,7 +795,7 @@
     const x = bossOfDay(); if (!x) return;
     home.style.setProperty('--glow', x.B.glow);
     home.innerHTML = '';
-    const im = el('img', 'hboss'); im.src = `arena/${x.B.key}.webp`; im.alt = '';
+    const im = el('img', 'hboss'); im.src = `arena/${x.B.key}.webp?v=2`; im.alt = '';
     const t = el('div', 'ht');
     t.append(el('div', 'hk', x.beaten ? 'Все боссы на сегодня повержены' : 'БОСС ДНЯ'), el('b', '', x.B.name), el('span', '', `${x.sec === SESSION ? 'Все разделы' : SEC_NAMES[x.sec]} · ${statusText(x)}`));
     const go = el('button', 'primary fightbtn', x.beaten ? 'Ещё бой' : 'В бой');

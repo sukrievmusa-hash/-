@@ -209,7 +209,7 @@
     f.append(inp);
     const av = el('div', 'dl-av'); AVS.forEach((a) => { const b = el('button', a === P.av ? 'on' : '', a); b.onclick = () => { P.av = a; save(); renderProf(); hello(); }; av.append(b); }); f.append(av);
     top.append(f); c.append(top);
-    const fg = el('div', 'dl-fig'); FIGH.forEach(([k, n]) => { const b = el('button', k === P.fk ? 'on' : ''); const im = el('img'); im.src = `arena/${k}.webp`; im.alt = ''; b.append(im, el('span', '', n)); b.onclick = () => { P.fk = k; save(); renderProf(); hello(); }; fg.append(b); }); c.append(fg);
+    const fg = el('div', 'dl-fig'); FIGH.forEach(([k, n]) => { const b = el('button', k === P.fk ? 'on' : ''); const im = el('img'); im.src = `arena/${k}.webp?v=2`; im.alt = ''; b.append(im, el('span', '', n)); b.onclick = () => { P.fk = k; save(); renderProf(); hello(); }; fg.append(b); }); c.append(fg);
     const cols = el('div', 'dl-cols'); if (P.fk !== 'bull') cols.hidden = true; COLS.forEach(([n, h]) => { const b = el('button', h === P.col ? 'on' : ''); b.style.background = h; b.title = n; b.setAttribute('aria-label', n); b.onclick = () => { P.col = h; save(); renderProf(); hello(); }; cols.append(b); }); c.append(cols);
     preview(cv);
   }
@@ -244,7 +244,7 @@
       const col = el('div', 'dl-team'); col.append(el('div', 'th', 'Команда ' + (t ? 'Б' : 'А')));
       tm.forEach((x) => {
         const a = el('div', 'dl-pl'); a.style.setProperty('--c', x.col);
-        const fi = el('img', 'fi'); fi.src = `arena/${x.fk || 'bull'}.webp`; fi.alt = ''; a.append(fi, el('i', '', x.av), el('b', '', x.name + (x.id === myId ? ' (ты)' : '')));
+        const fi = el('img', 'fi'); fi.src = `arena/${x.fk || 'bull'}.webp?v=2`; fi.alt = ''; a.append(fi, el('i', '', x.av), el('b', '', x.name + (x.id === myId ? ' (ты)' : '')));
         if (x.id === myId) { const sw = el('button', 'sw', '⇄'); sw.title = 'Сменить команду'; sw.onclick = () => { if (isHost) { teamOf[myId] = 1 - t; rebuild(true); } else send({ t: 'team', team: 1 - t }); }; a.append(sw); }
         col.append(a);
       });
