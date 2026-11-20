@@ -537,3 +537,8 @@ button.primary,button.ghost,button.danger,.filebtn{border-radius:8px}
 .sesscall .scard span{font-size:12px;color:#a9b3cb}
 .sesscall .fightbtn{width:100%;margin:6px 0 0;padding:9px;background:linear-gradient(180deg,#ffb02e,#e2700c);color:#2a1200;font-weight:900;font-size:15px;box-shadow:0 3px 0 #8a3f00;text-transform:uppercase}
 .sesscall .sharebtn{width:100%;margin:6px 0 0;padding:8px;color:#cfe0ff;border-color:#3a4a72;background:transparent;font-size:14px}
+
+/* бой всегда на виду: арена закреплена вверху, ниже прокручиваются вопрос и варианты */
+#game.arena #arena{position:sticky;top:0;z-index:30;background:#0b0e16;padding:6px 12px 4px;margin:0 -12px;box-shadow:0 8px 14px -6px rgba(0,0,0,.7)}
+#game.arena .stage{height:clamp(196px,31vh,300px)}
+@media (max-height:700px){#game.arena .stage{height:208px}#game.arena .aname{font-size:11px}}

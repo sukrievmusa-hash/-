@@ -72,9 +72,9 @@
       <div class="acombo" id="aCombo"></div>
       <div class="vign" id="aVign"></div>
       <button class="asound" id="aSound" aria-label="Звук"></button>
-    </div>
-    <div class="mods" id="aMods"></div>`;
+    </div>`;
   box.insertBefore(stageWrap, box.querySelector('.gmeta'));
+  const modsEl = document.createElement('div'); modsEl.className = 'mods'; modsEl.id = 'aMods'; stageWrap.after(modsEl); // кнопки усилений не закрепляем: место на телефоне дорого
   const game = $('#game'), stage = $('#aStage');
   // бойцы рисуются на холсте (rig.js); me/bossEl — невидимые «пульты»: классы на них переводятся в состояние анимации
   const me = el('div'), bossEl = el('div');
