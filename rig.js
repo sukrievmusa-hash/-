@@ -96,16 +96,16 @@ window.Rig = (() => {
     const pr = P.p, k = P.kickM, t = P.t, str = .4 + Math.abs(pr);
     const lean = 3 + 5 * pr + 9 * k + Math.sin(t * 34) * str * 1.1;
     const dip = 2 + 14 * Math.max(0, -pr) - 5 * k + Math.sin(t * 17) * .7 + P.koM * 26;
-    const ha = 34 + 10 * Math.max(0, -pr) - 6 * Math.max(0, pr) + 8 * k - P.koM * 14;
+    const ha = 0 + 10 * Math.max(0, -pr) - 6 * Math.max(0, pr) + 8 * k - P.koM * 14;
     const PIV = [46, 0], ca = Math.cos(rad(lean)), sa = Math.sin(rad(lean));
     const tf = (x, y) => { const dx = x - PIV[0]; return [PIV[0] + dx * ca - y * sa, dx * sa + y * ca + dip]; };
-    const N = [52, -122], hc = Math.cos(rad(ha)), hs = Math.sin(rad(ha));
+    const N = [54, -65], hc = Math.cos(rad(ha)), hs = Math.sin(rad(ha));
     const head = (x, y) => tf(N[0] + x * hc - y * hs, N[1] + x * hs + y * hc);
-    return { lean, dip, ha, PIV, tf, N, head, gN: head(52, -68), gF: head(42, -56) };
+    return { lean, dip, ha, PIV, tf, N, head, gN: head(36, -55), gF: head(27, -49) };
   }
   /* ---------- спрайты быка (детали из листа, красные → перекрашиваются под цвет игрока) ---------- */
-  const SPR = {}, SPN = { head: 1, torso: 1, legf: 1, legh: 1, tail: 1, gear: 1 }, CACHE = {};
-  Object.keys(SPN).forEach((k) => { const im = new Image(); im.onload = () => { SPR[k] = im; }; im.src = 'arena/bull_' + k + '.webp?v=1'; });
+  const SPR = {}, SPN = { head: 1, torso: 1, legf: 1, haunch: 1, shinN: 1, hoofN: 1, shinF: 1, hoofF: 1, gear: 1 }, CACHE = {};
+  Object.keys(SPN).forEach((k) => { const im = new Image(); im.onload = () => { SPR[k] = im; }; im.src = 'arena/bull_' + k + '.webp?v=2'; });
   function hslOf(h) { const [r, g, b] = hex(h).map((v) => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; let hh = 0; if (d) { hh = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; } return hh * 60; }
   function recolor(name, col, dark, tint, tc) {
     const key = [name, col, dark, tint, tc].join('|'); if (CACHE[key]) return CACHE[key];
@@ -139,8 +139,7 @@ window.Rig = (() => {
   }
   // ноги: три части — бедро, голень и копыто (копыто всегда стоит на полу плоско), режем спрайт по колену и лодыжке
   const LEGS = {
-    legf: { H: [27, 22], K: [51, 83], A: [93, 121], F: [97, 134], sc: .85, tilt: -.25 },
-    legh: { H: [30, 26], K: [28, 85], A: [33, 120], F: [33, 133], sc: .95, tilt: 0 },
+    legf: { H: [27, 22], K: [51, 83], A: [93, 121], F: [97, 134], sc: .62, tilt: -.25 },
   };
   function half(g, P0, u, side) { // оставить полуплоскость по одну сторону от линии, перпендикулярной u и проходящей через P0
     const n = [-u[1], u[0]], B = 500, d = [u[0] * B * side, u[1] * B * side];
@@ -169,55 +168,68 @@ window.Rig = (() => {
     put(legPiece(name, col, dk, tn, TC, 1), Lg.K[0], Lg.K[1], kn[0], kn[1], aL, sL);
     put(legPiece(name, col, dk, tn, TC, 2), Lg.A[0], Lg.A[1], an[0], an[1], Lg.tilt, 0);
   }
-  function bullHead(P, S) { // голова в системе шеи (0,0): тянется к рогам
-    const sc = .66; spr('head', P.col || '#2f7dff', false, 35, 135, 0, 6, sc, 0, 1);
+  const K = .56; // масштаб деталей листа → единицы сцены
+  function bullHead(P) { spr('head', P.col || '#2f7dff', false, 40, 120, 0, 0, K, 0, 1); }
+  // задняя нога: одна кость от сустава ляжки к лодыжке (поворот + растяжение) и плоское копыто
+  const HIND = {
+    N: { J: [66, 123], A: [50, 166], F: [60, 183], jw: [-70, -32], shin: 'shinN', hoof: 'hoofN' },
+    F: { J: [111, 128], A: [110, 166], F: [118, 183], jw: [-45, -29], shin: 'shinF', hoof: 'hoofF' },
+  };
+  function hindLeg(key, col, tf, tg) {
+    const L = HIND[key], jw = tf(L.jw[0], L.jw[1]); if (!SPR[L.shin]) return;
+    const tn = TINT > 0 ? Math.round(TINT * 6) / 6 : 0;
+    const at = [tg[0] - (L.F[0] - L.A[0]) * K, tg[1] - (L.F[1] - L.A[1]) * K], vx = at[0] - jw[0], vy = at[1] - jw[1];
+    const len0 = Math.hypot(L.A[0] - L.J[0], L.A[1] - L.J[1]) * K, d = Math.hypot(vx, vy) || 1, st = clamp(d / len0, .8, 1.2), an = Math.atan2(vy, vx), sa = Math.atan2(L.A[1] - L.J[1], L.A[0] - L.J[0]);
+    cx.save(); cx.translate(jw[0], jw[1]); cx.rotate(an); cx.scale(K * st, K); cx.rotate(-sa); cx.drawImage(recolor(L.shin, col, 0, tn, TC), -L.J[0], -L.J[1]); cx.restore();
+    const aw = [jw[0] + Math.cos(an) * len0 * st, jw[1] + Math.sin(an) * len0 * st];
+    cx.save(); cx.translate(aw[0], aw[1]); cx.scale(K, K); cx.drawImage(recolor(L.hoof, col, 0, tn, TC), -L.A[0], -L.A[1]); cx.restore();
   }
   function drawBull(P, S) {
     const t = P.t, pr = P.p, { tf, N, ha, PIV, dip, lean } = S, sc = P.scars;
-    const BLUE = P.col || '#2f7dff', DARK = '#262d40', STEEL = '#58627a', BDK = shade(BLUE, .33), BSC = shade(BLUE, .2);
+    const BLUE = P.col || '#2f7dff';
     cx.save(); cx.translate(P.bx, 0);
-    shadow(10, 86);
+    shadow(0, 92);
     if (P.koM) { cx.translate(-50, 0); cx.rotate(-rad(P.koM * 14)); cx.translate(50, 0); }
     TINT = P.flashM * .7; TC = [255, 50, 40];
     if (P.charge > 0 && TINT < P.charge * .45) { TINT = P.charge * .45; TC = [130, 220, 255]; }
-    const legs = [[-40, -94, -42, 1, 1], [18, -102, 36, -1, 1], [-26, -92, -24, 1, 0], [32, -98, 54, -1, 0]];
     const eff = .45 + 1.1 * P.kickM + .45 * Math.abs(pr), amp = 9 + 14 * eff, sid = P.sid || 'l', OFF = [0, .5, .25, .75];
-    const leg = (L, i) => {
-      const [hx, hy, fx, dir, far] = L, h = tf(hx, hy), [sdx, lf] = P.koM > .2 ? [0, 0] : stepFoot(sid + 'b' + i, OFF[i], t, eff, amp, P.bx + fx);
-      const nm = dir > 0 ? 'legh' : 'legf', Lg = LEGS[nm], l1 = Math.hypot(Lg.K[0] - Lg.H[0], Lg.K[1] - Lg.H[1]) * Lg.sc, l2 = Math.hypot(Lg.A[0] - Lg.K[0], Lg.A[1] - Lg.K[1]) * Lg.sc;
-      const tg = [fx + sdx - (Lg.F[0] - Lg.A[0]) * Lg.sc, -lf - (Lg.F[1] - Lg.A[1]) * Lg.sc];
-      const [kn, ft] = ik(h, tg, l1, l2, dir);
-      drawLeg(nm, BLUE, far, h, kn, ft);
+    const foot = (i, fx) => { const [sdx, lf] = P.koM > .2 ? [0, 0] : stepFoot(sid + 'b' + i, OFF[i], t, eff, amp, P.bx + fx); return [fx + sdx, -lf]; };
+    const front = (hx, hy, fx, far, i) => {
+      const h = tf(hx, hy), Lg = LEGS.legf, l1 = Math.hypot(Lg.K[0] - Lg.H[0], Lg.K[1] - Lg.H[1]) * Lg.sc, l2 = Math.hypot(Lg.A[0] - Lg.K[0], Lg.A[1] - Lg.K[1]) * Lg.sc, f = foot(i, fx);
+      const tg = [f[0] - (Lg.F[0] - Lg.A[0]) * Lg.sc, f[1] - (Lg.F[1] - Lg.A[1]) * Lg.sc], sgn = (Lg.F[0] - Lg.H[0]) * (Lg.K[1] - Lg.H[1]) - (Lg.F[1] - Lg.H[1]) * (Lg.K[0] - Lg.H[0]);
+      let [kn, an] = ik(h, tg, l1, l2, -1);
+      if (((an[0] - h[0]) * (kn[1] - h[1]) - (an[1] - h[1]) * (kn[0] - h[0]) > 0) !== (sgn > 0)) [kn, an] = ik(h, tg, l1, l2, 1);
+      drawLeg('legf', BLUE, far, h, kn, an);
     };
-    leg(legs[0], 0); leg(legs[1], 1);
-    // корпус
+    // дальние ноги
+    hindLeg('F', BLUE, tf, foot(0, -41)); front(24, -76, 38, true, 1);
+    // корпус: голова спрятана под плечевой пластиной, туловище, затем круп с хвостом
     cx.save(); cx.translate(PIV[0], dip); cx.rotate(rad(lean)); cx.translate(-PIV[0], 0);
-    const sw = Math.sin(t * 5) * 6 - pr * 5;
-    spr('tail', BLUE, false, 100, 28, -56, -106, .42, -rad(40 - sw * 1.2), 1);
-    // голова
     cx.save(); cx.translate(N[0], N[1]); cx.rotate(rad(ha));
-    bullHead(P, S);
-    glow(30, -14, 12, '#ffb02e', .55 + .3 * Math.sin(t * 8));
+    bullHead(P);
+    glow(27, -27, 11, '#ffb02e', .5 + .3 * Math.sin(t * 8));
     cx.restore();
-    spr('torso', BLUE, false, 0, 169, -64, -60, .6, 0, 1);
+    spr('torso', BLUE, false, 0, 0, -59.4, -140.6, K, 0, 1);
+    spr('haunch', BLUE, false, 0, 0, -107, -100.8, K, 0, 1);
     // повреждения
     if (sc >= 1) {
-      cx.beginPath(); cx.ellipse(-6, -108, 11, 7, -.2, 0, 7); shape(C('#0d1018'), 2);
-      gear(-8, -108, 6, -t * 6, '#9aa6bd', 6);
-      cx.lineWidth = 2; [['#5cc8ff', 2], ['#ff8a1e', -3]].forEach(([c, o]) => { cx.strokeStyle = c; cx.beginPath(); cx.moveTo(-2, -108); cx.quadraticCurveTo(8 + o, -96 + Math.sin(t * 9 + o) * 3, 4 + o, -84); cx.stroke(); });
-      if (Math.sin(t * 23) > .3) glow(2, -92, 10, '#7cf0ff', .9);
-      cx.strokeStyle = OUT; cx.lineWidth = 1.6; cx.beginPath(); cx.moveTo(-50, -76); cx.lineTo(-40, -80); cx.lineTo(-44, -72); cx.lineTo(-34, -74); cx.stroke();
+      cx.beginPath(); cx.ellipse(2, -102, 11, 7, -.2, 0, 7); shape(C('#0d1018'), 2);
+      gear(0, -102, 6, -t * 6, '#9aa6bd', 6);
+      cx.lineWidth = 2; [['#5cc8ff', 2], ['#ff8a1e', -3]].forEach(([c, o]) => { cx.strokeStyle = c; cx.beginPath(); cx.moveTo(6, -102); cx.quadraticCurveTo(16 + o, -90 + Math.sin(t * 9 + o) * 3, 12 + o, -78); cx.stroke(); });
+      if (Math.sin(t * 23) > .3) glow(10, -88, 10, '#7cf0ff', .9);
+      cx.strokeStyle = OUT; cx.lineWidth = 1.6; cx.beginPath(); cx.moveTo(-30, -112); cx.lineTo(-20, -116); cx.lineTo(-24, -108); cx.lineTo(-14, -110); cx.stroke();
     }
     if (sc >= 2) {
       cx.strokeStyle = OUT; cx.lineWidth = 1.8; cx.beginPath(); cx.moveTo(36, -128); cx.lineTo(26, -118); cx.lineTo(34, -114); cx.lineTo(22, -102); cx.stroke();
-      if (Math.sin(t * 12) > 0) lamp(-24, -128, 3.5, '#ff2a20');
+      if (Math.sin(t * 12) > 0) lamp(-14, -122, 3.5, '#ff2a20');
     }
-    // колесо на плече: крутящаяся шестерёнка + свечение
-    const wx = 30, wy = -96, wsp = t * (4 + 14 * Math.abs(pr) + 10 * P.kickM);
-    spr('gear', '#ffffff', false, 26.5, 26.5, wx, wy, .4, wsp, 1);
-    glow(wx, wy, 24, P.turbo ? '#ff8a1e' : '#4fd2ff', .4 + .3 * Math.abs(Math.sin(t * 6))); lamp(wx, wy, 3.5, P.turbo ? '#ffb02e' : '#9ff0ff');
     cx.restore();
-    leg(legs[2], 2); leg(legs[3], 3);
+    // ближние ноги
+    hindLeg('N', BLUE, tf, foot(2, -73)); front(32, -73, 56, false, 3);
+    // колесо на плече поверх ноги: шестерёнка + свечение
+    { const w = tf(30, -74), wsp = t * (4 + 14 * Math.abs(pr) + 10 * P.kickM);
+      spr('gear', BLUE, false, 26.5, 26.5, w[0], w[1], .3, wsp, 1);
+      glow(w[0], w[1], 15, P.turbo ? '#ff8a1e' : '#4fd2ff', .15 + .2 * Math.abs(Math.sin(t * 6))); }
     TINT = 0;
     // щит
     const sh = Math.max(P.shield, P.blockT);
@@ -557,7 +569,7 @@ window.Rig = (() => {
       P.bx = gx - S.gN[0] + P.introM + jit;
       gw = { gN: [P.bx + S.gN[0], S.gN[1]], gF: [P.bx + S.gF[0], S.gF[1]] };
       if (P.hide !== 'bull') drawBull(P, S);
-      la = { bull: [P.bx + 6, -96], bullRear: [P.bx - 50, -40], bullFront: [P.bx + 50, -40] };
+      la = { bull: [P.bx + 6, -96], bullRear: [P.bx - 85, -40], bullFront: [P.bx + 55, -40] };
     }
     const bossBx = gx + B.sx + B.D(P.p) + P.introB - jit;
     if (P.introB > 1 && !LK) { gw.gN = [gx + 40 + P.introB, -128]; gw.gF = [gx + 50 + P.introB, -122]; }
@@ -568,7 +580,7 @@ window.Rig = (() => {
       const S2 = bullPose(P2), gx2 = VW / 2 + P2.p * 30;
       P2.bx = gx2 - S2.gN[0] + P.introB - jit;
       if (P.hide !== 'boss') { cx.save(); cx.translate(VW, 0); cx.scale(-1, 1); FLIP = true; MIR = true; drawBull(P2, S2); FLIP = false; MIR = false; cx.restore(); }
-      an = { body: [VW - (P2.bx + 6), -96], head: [VW - (P2.bx + 40), -110], mouth: [VW - (P2.bx + 50), -90], rear: VW - (P2.bx - 50) };
+      an = { body: [VW - (P2.bx + 6), -96], head: [VW - (P2.bx + 40), -110], mouth: [VW - (P2.bx + 50), -90], rear: VW - (P2.bx - 85) };
     } else {
       const g2 = LK ? fall : gw;
       an = P.hide === 'boss' ? { body: [bossBx, -110], head: [bossBx, -170], mouth: [bossBx, -170] } : B.draw(Q, g2);
