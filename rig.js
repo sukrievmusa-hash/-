@@ -96,12 +96,12 @@ window.Rig = (() => {
     const pr = P.p, k = P.kickM, t = P.t, str = .4 + Math.abs(pr);
     const lean = 3 + 5 * pr + 9 * k + Math.sin(t * 34) * str * 1.1;
     const dip = 2 + 14 * Math.max(0, -pr) - 5 * k + Math.sin(t * 17) * .7 + P.koM * 26;
-    const ha = 22 + 10 * Math.max(0, -pr) - 6 * Math.max(0, pr) + 8 * k - P.koM * 14;
+    const ha = 34 + 10 * Math.max(0, -pr) - 6 * Math.max(0, pr) + 8 * k - P.koM * 14;
     const PIV = [46, 0], ca = Math.cos(rad(lean)), sa = Math.sin(rad(lean));
     const tf = (x, y) => { const dx = x - PIV[0]; return [PIV[0] + dx * ca - y * sa, dx * sa + y * ca + dip]; };
-    const N = [54, -106], hc = Math.cos(rad(ha)), hs = Math.sin(rad(ha));
+    const N = [52, -122], hc = Math.cos(rad(ha)), hs = Math.sin(rad(ha));
     const head = (x, y) => tf(N[0] + x * hc - y * hs, N[1] + x * hs + y * hc);
-    return { lean, dip, ha, PIV, tf, N, head, gN: head(54, -86), gF: head(42, -72) };
+    return { lean, dip, ha, PIV, tf, N, head, gN: head(52, -68), gF: head(42, -56) };
   }
   /* ---------- спрайты быка (детали из листа, красные → перекрашиваются под цвет игрока) ---------- */
   const SPR = {}, SPN = { head: 1, torso: 1, legf: 1, legh: 1, tail: 1, gear: 1 }, CACHE = {};
@@ -118,10 +118,10 @@ window.Rig = (() => {
       const mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), dl = mx - mn, l = (mx + mn) / 2;
       if (dl > .05) {
         let h = mx === r ? ((gg - b) / dl + 6) % 6 : mx === gg ? (b - r) / dl + 2 : (r - gg) / dl + 4; h *= 60;
-        const sat = dl / (1 - Math.abs(2 * l - 1) || 1);
+        const sat = Math.min(1, dl / (1 - Math.abs(2 * l - 1) || 1) * 1.35);
         if (h < 28 || h > 330) { // красный/розовый металл — перекрашиваем, жёлтые глаза и огонь не трогаем
-          h = (h + shift + 720) % 360;
-          const C2 = (1 - Math.abs(2 * l - 1)) * sat, X = C2 * (1 - Math.abs((h / 60) % 2 - 1)), m = l - C2 / 2, k = Math.floor(h / 60);
+          h = (h + shift + 720) % 360; const l2 = Math.min(.82, l * 1.1);
+          const C2 = (1 - Math.abs(2 * l2 - 1)) * sat, X = C2 * (1 - Math.abs((h / 60) % 2 - 1)), m = l2 - C2 / 2, k = Math.floor(h / 60);
           const q = [[C2, X, 0], [X, C2, 0], [0, C2, X], [0, X, C2], [X, 0, C2], [C2, 0, X]][k % 6]; r = q[0] + m; gg = q[1] + m; b = q[2] + m;
         }
       }
@@ -139,8 +139,8 @@ window.Rig = (() => {
   }
   // ноги: две части (бедро и голень), режем спрайт по колену и ставим по IK
   const LEGS = {
-    legf: { H: [27, 22], K: [51, 83], F: [95, 133], sc: .72 },
-    legh: { H: [30, 26], K: [28, 85], F: [33, 133], sc: .9 },
+    legf: { H: [27, 22], K: [51, 83], F: [95, 133], sc: .85 },
+    legh: { H: [30, 26], K: [28, 85], F: [33, 133], sc: .95 },
   };
   function legPiece(name, col, dark, tint, tc, part) {
     const key = ['leg', name, col, dark, tint, tc, part].join('|'); if (CACHE[key]) return CACHE[key];
@@ -162,14 +162,14 @@ window.Rig = (() => {
     const sU = Math.atan2(Lg.K[1] - Lg.H[1], Lg.K[0] - Lg.H[0]), sL = Math.atan2(Lg.F[1] - Lg.K[1], Lg.F[0] - Lg.K[0]);
     const cross = (Lg.F[0] - Lg.H[0]) * (Lg.K[1] - Lg.H[1]) - (Lg.F[1] - Lg.H[1]) * (Lg.K[0] - Lg.H[0]);
     const cr2 = (ft[0] - h[0]) * (kn[1] - h[1]) - (ft[1] - h[1]) * (kn[0] - h[0]);
-    const mir = (cross > 0) === (cr2 > 0) ? 1 : -1;
+    const mir = 1;
     const aU = Math.atan2(kn[1] - h[1], kn[0] - h[0]), aL = Math.atan2(ft[1] - kn[1], ft[0] - kn[0]);
     const put = (img, px, py, x, y, a, sa) => { cx.save(); cx.translate(x, y); cx.rotate(a); cx.scale(sc, sc * mir); cx.rotate(-sa); cx.drawImage(img, -px, -py); cx.restore(); };
     put(up, Lg.H[0], Lg.H[1], h[0], h[1], aU, sU);
     put(lo, Lg.K[0], Lg.K[1], kn[0], kn[1], aL, sL);
   }
   function bullHead(P, S) { // голова в системе шеи (0,0): тянется к рогам
-    const sc = .72; spr('head', P.col || '#2f7dff', false, 35, 135, 0, 6, sc, 0, 1);
+    const sc = .66; spr('head', P.col || '#2f7dff', false, 35, 135, 0, 6, sc, 0, 1);
   }
   function drawBull(P, S) {
     const t = P.t, pr = P.p, { tf, N, ha, PIV, dip, lean } = S, sc = P.scars;
@@ -179,20 +179,22 @@ window.Rig = (() => {
     if (P.koM) { cx.translate(-50, 0); cx.rotate(-rad(P.koM * 14)); cx.translate(50, 0); }
     TINT = P.flashM * .7; TC = [255, 50, 40];
     if (P.charge > 0 && TINT < P.charge * .45) { TINT = P.charge * .45; TC = [130, 220, 255]; }
-    const legs = [[-54, -88, -56, 1, 1], [24, -92, 42, -1, 1], [-38, -86, -36, 1, 0], [36, -90, 60, -1, 0]];
+    const legs = [[-40, -94, -42, 1, 1], [18, -102, 36, -1, 1], [-26, -92, -24, 1, 0], [32, -98, 54, -1, 0]];
     const eff = .45 + 1.1 * P.kickM + .45 * Math.abs(pr), amp = 9 + 14 * eff, sid = P.sid || 'l', OFF = [0, .5, .25, .75];
     const leg = (L, i) => {
       const [hx, hy, fx, dir, far] = L, h = tf(hx, hy), [sdx, lf] = P.koM > .2 ? [0, 0] : stepFoot(sid + 'b' + i, OFF[i], t, eff, amp, P.bx + fx);
       const nm = dir > 0 ? 'legh' : 'legf', Lg = LEGS[nm], l1 = Math.hypot(Lg.K[0] - Lg.H[0], Lg.K[1] - Lg.H[1]) * Lg.sc, l2 = Math.hypot(Lg.F[0] - Lg.K[0], Lg.F[1] - Lg.K[1]) * Lg.sc;
-      const [kn, ft] = ik(h, [fx + sdx, -lf], l1, l2, dir);
+      const tg = [fx + sdx, -lf], Lg2 = LEGS[nm], sgn = (Lg2.F[0] - Lg2.H[0]) * (Lg2.K[1] - Lg2.H[1]) - (Lg2.F[1] - Lg2.H[1]) * (Lg2.K[0] - Lg2.H[0]);
+      let [kn, ft] = ik(h, tg, l1, l2, dir);
+      if (((ft[0] - h[0]) * (kn[1] - h[1]) - (ft[1] - h[1]) * (kn[0] - h[0]) > 0) !== (sgn > 0)) [kn, ft] = ik(h, tg, l1, l2, -dir); // колено гнётся так же, как нарисовано, копыто смотрит вперёд
       drawLeg(nm, BLUE, far, h, kn, ft);
     };
     leg(legs[0], 0); leg(legs[1], 1);
     // корпус
     cx.save(); cx.translate(PIV[0], dip); cx.rotate(rad(lean)); cx.translate(-PIV[0], 0);
     const sw = Math.sin(t * 5) * 6 - pr * 5;
-    spr('tail', BLUE, false, 100, 28, -76, -102, .7, rad(18 + sw * 1.4), 1);
-    spr('torso', BLUE, false, 0, 169, -84, -50, .72, 0, 1);
+    spr('tail', BLUE, false, 100, 28, -56, -106, .42, -rad(40 - sw * 1.2), 1);
+    spr('torso', BLUE, false, 0, 169, -64, -60, .6, 0, 1);
     // повреждения
     if (sc >= 1) {
       cx.beginPath(); cx.ellipse(-6, -108, 11, 7, -.2, 0, 7); shape(C('#0d1018'), 2);
@@ -206,13 +208,13 @@ window.Rig = (() => {
       if (Math.sin(t * 12) > 0) lamp(-24, -128, 3.5, '#ff2a20');
     }
     // колесо на плече: крутящаяся шестерёнка + свечение
-    const wx = 29, wy = -92, wsp = t * (4 + 14 * Math.abs(pr) + 10 * P.kickM);
-    spr('gear', '#ffffff', false, 26.5, 26.5, wx, wy, .48, wsp, 1);
+    const wx = 30, wy = -96, wsp = t * (4 + 14 * Math.abs(pr) + 10 * P.kickM);
+    spr('gear', '#ffffff', false, 26.5, 26.5, wx, wy, .4, wsp, 1);
     glow(wx, wy, 24, P.turbo ? '#ff8a1e' : '#4fd2ff', .4 + .3 * Math.abs(Math.sin(t * 6))); lamp(wx, wy, 3.5, P.turbo ? '#ffb02e' : '#9ff0ff');
     // голова
     cx.save(); cx.translate(N[0], N[1]); cx.rotate(rad(ha));
     bullHead(P, S);
-    glow(32, -16, 12, '#ffb02e', .55 + .3 * Math.sin(t * 8));
+    glow(30, -14, 12, '#ffb02e', .55 + .3 * Math.sin(t * 8));
     cx.restore();
     cx.restore();
     leg(legs[2], 2); leg(legs[3], 3);
