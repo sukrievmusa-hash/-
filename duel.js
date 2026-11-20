@@ -15,7 +15,7 @@
   const BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt'];
   const LIMIT = 240; // секунд на бой, потом решает положение быков
   const MAXP = 4;
-  const COOP_N = 20; // вопросов на человека в совместном бою с боссом
+  const COOP_N = 25; // вопросов на человека в совместном бою с боссом
 
   /* ---------- профиль ---------- */
   const P = A.duel = A.duel || {};
@@ -161,7 +161,7 @@
     launch(q, { practice: false, extra: false, scope: sc, size: q.length, hearts: 99, arena: { sec: s, duel: D } });
     every(1000, tick); every(1200, () => { const f = Arena._f(); if (f) send({ t: 'sync', p: f.pt, tm: match.myTeam }); }); every(2000, () => send({ t: 'hb' }));
   }
-  /* совместный бой: все против босса, у каждого свои 20 вопросов, верные ответы друзей тоже бьют босса */
+  /* совместный бой: все против босса, у каждого свои 25 вопросов, верные ответы друзей тоже бьют босса */
   function beginCoop(l, s) {
     const meE = l.find((x) => x.id === myId); if (!meE) return;
     const mates = l.filter((x) => x.id !== myId);

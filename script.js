@@ -68,6 +68,11 @@ const SEC_NAMES = window.BUILTIN_SECTIONS || {};
 const SEC_BY_LECTURE = {};
 (window.BUILTIN_LECTURES || []).forEach((l) => { SEC_BY_LECTURE['b-' + l.id] = l.section; });
 const sectionOf = (c) => SEC_BY_LECTURE[c.lecture] || 0;
+const LEVEL_NAMES = ['', 'Лёгкий', 'Средний', 'Сложный'];
+function levelOf(c) { // уровень сложности вопроса (0 — у раздела уровней нет)
+  const L = (window.SECTION_LEVELS || {})[sectionOf(c)], m = L && /^№(\d+)/.exec(c.q || '');
+  return m ? +L[m[1] - 1] || 0 : 0;
+}
 const LECS = (window.BUILTIN_LECTURES || []).map((l) => ({ id: 'b-' + l.id, section: l.section, title: l.title }));
 const lecLabel = (t) => t.split('. ')[0];            // «Лекция 1»
 const lecTopic = (t) => t.split('. ').slice(1).join('. '); // «Матрицы и определители»
@@ -533,7 +538,7 @@ function nextCard() {
   hearts();
   $('#gBar').style.width = (Math.min(G.i, G.total) / G.total * 100) + '%';
   $('#gCombo').textContent = G.combo >= 2 ? `Серия верных: ${G.combo}` : '';
-  $('#gLecture').textContent = (G.diag ? 'Диагностика · ' : G.weak ? 'Слабые места · ' : G.practice ? 'Практика · ' : 'Повторение · ') + lectureName(c.lecture);
+  $('#gLecture').textContent = (G.diag ? 'Диагностика · ' : G.weak ? 'Слабые места · ' : G.practice ? 'Практика · ' : 'Повторение · ') + lectureName(c.lecture) + (levelOf(c) ? ` · ${'★'.repeat(levelOf(c))} ${LEVEL_NAMES[levelOf(c)]}` : '');
   setText($('#gQ'), c.q);
   setText($('#gA'), c.a);
   $('#gA').hidden = true; $('#gGrades').hidden = true; $('#gExplain').hidden = true; $('#gNext').hidden = true;

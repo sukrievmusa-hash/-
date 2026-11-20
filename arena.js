@@ -16,10 +16,10 @@
     3: { key: 'dragon', name: 'Дракон Пределов', color: '#ff5a2a', glow: 'rgba(255,80,40,.6)', front: 0.07, rate: 0.027, w: 0.42,
       start: 'Предел твоих знаний уже близок!', rage: 'Ты стремишься ко мне, но не достигнешь!',
       win: 'Предела нет. Как и твоей победы.', die: 'Производная… обнулилась…' },
-    99: { key: 'session', name: 'Сессия 1. Математика', color: '#ff3a4a', glow: 'rgba(255,60,80,.6)', front: 0.06, rate: 0.032, w: 0.46, cards: 20,
+    99: { key: 'session', name: 'Сессия 1. Математика', color: '#ff3a4a', glow: 'rgba(255,60,80,.6)', front: 0.06, rate: 0.032, w: 0.46, cards: 25,
       start: 'Экзамен начинается. Все разделы, без шпаргалок.', rage: 'Это ещё не пересдача!',
       win: 'Встретимся на пересдаче.', die: 'Зачёт… поставлен…' },
-    98: { key: 'english', name: 'Экзамен по английскому', color: '#3aa0ff', glow: 'rgba(60,150,255,.6)', front: 0.06, rate: 0.03, w: 0.46, cards: 20,
+    98: { key: 'english', name: 'Экзамен по английскому', color: '#3aa0ff', glow: 'rgba(60,150,255,.6)', front: 0.06, rate: 0.03, w: 0.46, cards: 25,
       start: 'Exam time! No dictionaries.', rage: 'Not bad… but not good enough!',
       win: 'See you at the retake.', die: 'Well done… you passed…' },
     4: { key: 'serpent', name: 'Змей Бесконечности', color: '#b46bff', glow: 'rgba(170,90,255,.6)', front: 0.05, rate: 0.03, w: 0.42,
@@ -577,7 +577,8 @@
       setHp();
     } else { F.team.wrong++; floatText(av + ' ошибся', x + 20, y - 70, 'turbo'); }
   }
-  function coopQueue(sec, n) { // 20 своих карточек: сначала к повторению, потом новые, потом тренировка
+  function coopQueue(sec, n) { // свои карточки: сначала к повторению, потом новые, потом тренировка
+    if (hasLevels(sec)) return levelQueue(sec, n)[0];
     if (sec === SESSION) return sessionQueue(n)[0];
     const sc = scopeOf(sec), seen = new Set(), q = [];
     const add = (list) => list.forEach((c) => { if (q.length < n && !seen.has(c.id)) { seen.add(c.id); q.push(c); } });
@@ -777,7 +778,23 @@
   const sizeOf = (sec) => (BOSSES[sec] && BOSSES[sec].cards) || FIGHT;
   const statusText = (x) => x.sec >= 90 ? `${sizeOf(x.sec)} вопросов · ${x.mode === 'rev' ? 'повторение' : x.mode === 'new' ? 'новые' : 'тренировка'}` : x.mode === 'rev' ? `${Math.min(sizeOf(x.sec), x.due)} карточек к бою` : x.mode === 'new' ? 'новые карточки' : 'тренировочный бой';
   /* сессия: карточки из всех лекций вперемешку — сначала просроченные, потом новые, иначе тренировка */
+  /* Билет по уровням: ~48% лёгких, ~32% средних, ~20% сложных (25 → 12/8/5), от лёгких к сложным.
+     В каждом уровне сначала те, что пора повторить, потом новые, потом остальные. */
+  const hasLevels = (sec) => !!(window.SECTION_LEVELS || {})[sec];
+  function levelQueue(sec, n) {
+    const now = Date.now(), mine = S.cards.filter((c) => sectionOf(c) === sec), used = new Set();
+    const want = [0, Math.round(n * .48), Math.round(n * .32)]; want[3] = n - want[1] - want[2];
+    const rank = (c) => (c.seen && c.due <= now ? 0 : !c.seen ? 1 : 2);
+    const order = (list) => shuffle(list).sort((a, b) => rank(a) - rank(b) || (rank(a) !== 1 ? a.due - b.due : 0));
+    const blocks = [1, 2, 3].map((lv) => { const b = order(mine.filter((c) => levelOf(c) === lv)).slice(0, want[lv]); b.forEach((c) => used.add(c.id)); return b; });
+    let short = n - blocks.reduce((k, b) => k + b.length, 0); // если какого-то уровня не хватило — добираем соседним
+    [2, 1, 3].forEach((lv) => { if (short <= 0) return; const add = order(mine.filter((c) => levelOf(c) === lv && !used.has(c.id))).slice(0, short); add.forEach((c) => used.add(c.id)); blocks[lv - 1].push(...add); short -= add.length; });
+    const q = blocks.map((b) => shuffle(b)).flat();
+    const mode = q.some((c) => rank(c) === 0) ? 'rev' : q.some((c) => rank(c) === 1) ? 'new' : 'prac';
+    return [q, mode];
+  }
   function sessionQueue(n) {
+    if (hasLevels(SESSION)) return levelQueue(SESSION, n);
     const now = Date.now();
     const mix = (arr) => { const g = {}; arr.forEach((c) => (g[c.lecture] = g[c.lecture] || []).push(c)); const L = shuffle(Object.values(g)), out = []; for (let i = 0; out.length < arr.length; i++) L.forEach((l) => { if (l[i]) out.push(l[i]); }); return out; };
     const mine = S.cards.filter((c) => sectionOf(c) === SESSION);
@@ -793,7 +810,7 @@
     if (!q.length) { q = practiceCards(sc); mode = 'prac'; }
     const n = sizeOf(sec);
     if (sec === SESSION) [q, mode] = sessionQueue(n);
-    else if (sec >= 90 && q.length < n) q = coopQueue(sec, n); // сессии: всегда полные 20 вопросов
+    else if (sec >= 90 && q.length < n) q = coopQueue(sec, n); // сессии: всегда полный билет
     q = q.slice(0, n);
     if (!q.length) return;
     hideHub();
@@ -848,7 +865,7 @@
     home.append(im, t);
     renderSess();
   }
-  /* боссы сессий на главной: каждому по 20 вопросов, можно позвать друзей */
+  /* боссы сессий на главной: каждому по 25 вопросов, можно позвать друзей */
   const sessEl = el('div', 'panel sesscall'); sessEl.id = 'sessHome';
   home.after(sessEl);
   function renderSess() {
