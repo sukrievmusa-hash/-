@@ -101,9 +101,76 @@ window.Rig = (() => {
     const tf = (x, y) => { const dx = x - PIV[0]; return [PIV[0] + dx * ca - y * sa, dx * sa + y * ca + dip]; };
     const N = [54, -106], hc = Math.cos(rad(ha)), hs = Math.sin(rad(ha));
     const head = (x, y) => tf(N[0] + x * hc - y * hs, N[1] + x * hs + y * hc);
-    return { lean, dip, ha, PIV, tf, N, head, gN: head(47, -45), gF: head(30, -36) };
+    return { lean, dip, ha, PIV, tf, N, head, gN: head(54, -86), gF: head(42, -72) };
   }
-  function hornPath() { cx.beginPath(); cx.moveTo(-6, -20); cx.quadraticCurveTo(21, -62, 68, -48); cx.quadraticCurveTo(32, -42, 8, -12); cx.closePath(); }
+  /* ---------- спрайты быка (детали из листа, красные → перекрашиваются под цвет игрока) ---------- */
+  const SPR = {}, SPN = { head: 1, torso: 1, legf: 1, legh: 1, tail: 1, gear: 1 }, CACHE = {};
+  Object.keys(SPN).forEach((k) => { const im = new Image(); im.onload = () => { SPR[k] = im; }; im.src = 'arena/bull_' + k + '.webp?v=1'; });
+  function hslOf(h) { const [r, g, b] = hex(h).map((v) => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; let hh = 0; if (d) { hh = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; } return hh * 60; }
+  function recolor(name, col, dark, tint, tc) {
+    const key = [name, col, dark, tint, tc].join('|'); if (CACHE[key]) return CACHE[key];
+    const im = SPR[name], c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height), px = d.data, shift = hslOf(col) - 3;
+    for (let i = 0; i < px.length; i += 4) {
+      if (!px[i + 3]) continue;
+      let r = px[i] / 255, gg = px[i + 1] / 255, b = px[i + 2] / 255;
+      const mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), dl = mx - mn, l = (mx + mn) / 2;
+      if (dl > .05) {
+        let h = mx === r ? ((gg - b) / dl + 6) % 6 : mx === gg ? (b - r) / dl + 2 : (r - gg) / dl + 4; h *= 60;
+        const sat = dl / (1 - Math.abs(2 * l - 1) || 1);
+        if (h < 28 || h > 330) { // красный/розовый металл — перекрашиваем, жёлтые глаза и огонь не трогаем
+          h = (h + shift + 720) % 360;
+          const C2 = (1 - Math.abs(2 * l - 1)) * sat, X = C2 * (1 - Math.abs((h / 60) % 2 - 1)), m = l - C2 / 2, k = Math.floor(h / 60);
+          const q = [[C2, X, 0], [X, C2, 0], [0, C2, X], [0, X, C2], [X, 0, C2], [C2, 0, X]][k % 6]; r = q[0] + m; gg = q[1] + m; b = q[2] + m;
+        }
+      }
+      if (dark) { r *= .66; gg *= .66; b *= .7; }
+      if (tint > 0) { r += (tc[0] / 255 - r) * tint; gg += (tc[1] / 255 - gg) * tint; b += (tc[2] / 255 - b) * tint; }
+      px[i] = r * 255; px[i + 1] = gg * 255; px[i + 2] = b * 255;
+    }
+    g.putImageData(d, 0, 0); return (CACHE[key] = c);
+  }
+  // нарисовать спрайт так, чтобы его точка (px,py) попала в (x,y); sc — масштаб, ang — поворот, mir — отражение
+  function spr(name, col, dark, px, py, x, y, sc, ang = 0, mir = 1) {
+    if (!SPR[name]) return;
+    const tn = TINT > 0 ? Math.round(TINT * 6) / 6 : 0, c = recolor(name, col, dark ? 1 : 0, tn, TC);
+    cx.save(); cx.translate(x, y); cx.rotate(ang); cx.scale(sc, sc * mir); cx.drawImage(c, -px, -py); cx.restore();
+  }
+  // ноги: две части (бедро и голень), режем спрайт по колену и ставим по IK
+  const LEGS = {
+    legf: { H: [27, 22], K: [51, 83], F: [95, 133], sc: .72 },
+    legh: { H: [30, 26], K: [28, 85], F: [33, 133], sc: .9 },
+  };
+  function legPiece(name, col, dark, tint, tc, part) {
+    const key = ['leg', name, col, dark, tint, tc, part].join('|'); if (CACHE[key]) return CACHE[key];
+    const src = recolor(name, col, dark, tint, tc), Lg = LEGS[name], c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+    const g = c.getContext('2d'), ax = [Lg.K[0] - Lg.H[0], Lg.K[1] - Lg.H[1]], al = Math.hypot(ax[0], ax[1]), u = [ax[0] / al, ax[1] / al];
+    g.save(); g.beginPath();
+    // полуплоскость, перпендикулярная кости, через колено (нижняя часть захватывает диск колена целиком)
+    const off = part ? -15 : 0, P0 = [Lg.K[0] + u[0] * off, Lg.K[1] + u[1] * off], n = [-u[1], u[0]], B = 400;
+    const dir = part ? 1 : -1;
+    g.moveTo(P0[0] + n[0] * B, P0[1] + n[1] * B); g.lineTo(P0[0] - n[0] * B, P0[1] - n[1] * B);
+    g.lineTo(P0[0] - n[0] * B + u[0] * B * dir, P0[1] - n[1] * B + u[1] * B * dir); g.lineTo(P0[0] + n[0] * B + u[0] * B * dir, P0[1] + n[1] * B + u[1] * B * dir);
+    g.closePath(); g.clip(); g.drawImage(src, 0, 0); g.restore();
+    return (CACHE[key] = c);
+  }
+  function drawLeg(name, col, dark, h, kn, ft) {
+    const Lg = LEGS[name]; if (!SPR[name]) return;
+    const tn = TINT > 0 ? Math.round(TINT * 6) / 6 : 0, sc = Lg.sc;
+    const up = legPiece(name, col, dark ? 1 : 0, tn, TC, 0), lo = legPiece(name, col, dark ? 1 : 0, tn, TC, 1);
+    const sU = Math.atan2(Lg.K[1] - Lg.H[1], Lg.K[0] - Lg.H[0]), sL = Math.atan2(Lg.F[1] - Lg.K[1], Lg.F[0] - Lg.K[0]);
+    const cross = (Lg.F[0] - Lg.H[0]) * (Lg.K[1] - Lg.H[1]) - (Lg.F[1] - Lg.H[1]) * (Lg.K[0] - Lg.H[0]);
+    const cr2 = (ft[0] - h[0]) * (kn[1] - h[1]) - (ft[1] - h[1]) * (kn[0] - h[0]);
+    const mir = (cross > 0) === (cr2 > 0) ? 1 : -1;
+    const aU = Math.atan2(kn[1] - h[1], kn[0] - h[0]), aL = Math.atan2(ft[1] - kn[1], ft[0] - kn[0]);
+    const put = (img, px, py, x, y, a, sa) => { cx.save(); cx.translate(x, y); cx.rotate(a); cx.scale(sc, sc * mir); cx.rotate(-sa); cx.drawImage(img, -px, -py); cx.restore(); };
+    put(up, Lg.H[0], Lg.H[1], h[0], h[1], aU, sU);
+    put(lo, Lg.K[0], Lg.K[1], kn[0], kn[1], aL, sL);
+  }
+  function bullHead(P, S) { // голова в системе шеи (0,0): тянется к рогам
+    const sc = .72; spr('head', P.col || '#2f7dff', false, 35, 135, 0, 6, sc, 0, 1);
+  }
   function drawBull(P, S) {
     const t = P.t, pr = P.p, { tf, N, ha, PIV, dip, lean } = S, sc = P.scars;
     const BLUE = P.col || '#2f7dff', DARK = '#262d40', STEEL = '#58627a', BDK = shade(BLUE, .33), BSC = shade(BLUE, .2);
@@ -112,65 +179,40 @@ window.Rig = (() => {
     if (P.koM) { cx.translate(-50, 0); cx.rotate(-rad(P.koM * 14)); cx.translate(50, 0); }
     TINT = P.flashM * .7; TC = [255, 50, 40];
     if (P.charge > 0 && TINT < P.charge * .45) { TINT = P.charge * .45; TC = [130, 220, 255]; }
-    const jig = (i) => pr < -.1 ? Math.sin(t * 30 + i * 2.1) * 2 * -pr : 0;
-    const legs = [[-50, -74, -52, 1, 1], [30, -70, 40, -1, 1], [-36, -72, -34, 1, 0], [44, -68, 58, -1, 0]];
+    const legs = [[-54, -88, -56, 1, 1], [24, -92, 42, -1, 1], [-38, -86, -36, 1, 0], [36, -90, 60, -1, 0]];
     const eff = .45 + 1.1 * P.kickM + .45 * Math.abs(pr), amp = 9 + 14 * eff, sid = P.sid || 'l', OFF = [0, .5, .25, .75];
     const leg = (L, i) => {
-      const [hx, hy, fx, dir, far] = L, h = tf(hx, hy), [sdx, lf] = P.koM > .2 ? [0, 0] : stepFoot(sid + 'b' + i, OFF[i], t, eff, amp, P.bx + fx), [kn, ft] = ik(h, [fx + sdx, -lf], 34, 36, dir), c = far ? BDK : BLUE;
-      limb(h, kn, far ? 18 : 22, c); limb(kn, ft, far ? 13 : 15, far ? '#3e475d' : STEEL);
-      const pa = [h[0] + (kn[0] - h[0]) * .3 + 6 * dir, h[1] + (kn[1] - h[1]) * .3], pb = [kn[0] + (ft[0] - kn[0]) * .45 + 5 * dir, kn[1] + (ft[1] - kn[1]) * .45];
-      cx.lineCap = 'round'; cx.strokeStyle = OUT; cx.lineWidth = 6; line(pa, pb); cx.stroke(); cx.strokeStyle = C('#cfd6e4'); cx.lineWidth = 2.5; line(pa, pb); cx.stroke();
-      disc(kn[0], kn[1], 7.5, far ? '#3e475d' : '#4b556d'); cx.beginPath(); cx.arc(kn[0], kn[1], 3.2, 0, 7); cx.fillStyle = C('#ffb02e'); cx.fill();
-      cx.save(); cx.translate(0, ft[1]); poly([[ft[0] - 11, 0], [ft[0] + 14, 0], [ft[0] + 15, -8], [ft[0] + 4, -14], [ft[0] - 8, -12]]); shape(vg(-14, 0, far ? '#2a3042' : '#3a4258')); cx.restore();
+      const [hx, hy, fx, dir, far] = L, h = tf(hx, hy), [sdx, lf] = P.koM > .2 ? [0, 0] : stepFoot(sid + 'b' + i, OFF[i], t, eff, amp, P.bx + fx);
+      const nm = dir > 0 ? 'legh' : 'legf', Lg = LEGS[nm], l1 = Math.hypot(Lg.K[0] - Lg.H[0], Lg.K[1] - Lg.H[1]) * Lg.sc, l2 = Math.hypot(Lg.F[0] - Lg.K[0], Lg.F[1] - Lg.K[1]) * Lg.sc;
+      const [kn, ft] = ik(h, [fx + sdx, -lf], l1, l2, dir);
+      drawLeg(nm, BLUE, far, h, kn, ft);
     };
     leg(legs[0], 0); leg(legs[1], 1);
     // корпус
     cx.save(); cx.translate(PIV[0], dip); cx.rotate(rad(lean)); cx.translate(-PIV[0], 0);
     const sw = Math.sin(t * 5) * 6 - pr * 5;
-    limb([-54, -100], [-78, -94 + sw * .4], 7, DARK, false); limb([-78, -94 + sw * .4], [-90, -118 + sw], 5, DARK, false);
-    blob([[-90, -116 + sw], [-100, -130 + sw], [-86, -128 + sw], [-84, -140 + sw], [-78, -122 + sw]]); shape(C('#3a4258'), 2);
-    poly([[-18, -140], [-6, -140], [-6, -152], [-18, -152]]); shape(vg(-152, -140, '#3a4258'));
-    blob([[-56, -92], [-48, -122], [-8, -138], [32, -144], [62, -126], [70, -96], [54, -66], [14, -58], [-30, -58], [-56, -72]]);
-    shape(vg(-146, -58, BLUE, .38, .45));
-    blob([[-42, -66], [0, -60], [46, -68], [42, -80], [0, -73], [-38, -78]]); shape(C(DARK), 2);
-    cx.lineCap = 'round'; cx.strokeStyle = RGBA('#bfe4ff', .55); cx.lineWidth = 4; cx.beginPath(); cx.moveTo(-44, -116); cx.quadraticCurveTo(-8, -136, 30, -138); cx.stroke();
-    [[-20, -104], [-4, -88]].forEach(([x, y]) => { poly([[x, y], [x + 22, y - 2], [x + 22, y + 4], [x, y + 6]]); shape(C('#ffb02e', .1), 1.6); glow(x + 11, y + 2, 14, '#ff9a2e', .35); });
-    // бедро
-    disc(-30, -98, 24, sc >= 2 ? '#1d4aa8' : '#2563d6'); disc(-30, -98, 12.5, '#1a2236');
-    gear(-30, -98, 9, t * 3, '#ffb02e', 7); glow(-30, -98, 16, '#ff9a2e', .45);
+    spr('tail', BLUE, false, 100, 28, -76, -102, .7, rad(18 + sw * 1.4), 1);
+    spr('torso', BLUE, false, 0, 169, -84, -50, .72, 0, 1);
     // повреждения
     if (sc >= 1) {
-      cx.beginPath(); cx.ellipse(6, -116, 11, 7, -.2, 0, 7); shape(C('#0d1018'), 2);
-      gear(4, -116, 6, -t * 6, '#9aa6bd', 6);
-      cx.lineWidth = 2; [['#5cc8ff', 2], ['#ff8a1e', -3]].forEach(([c, o]) => { cx.strokeStyle = c; cx.beginPath(); cx.moveTo(10, -116); cx.quadraticCurveTo(20 + o, -104 + Math.sin(t * 9 + o) * 3, 16 + o, -94); cx.stroke(); });
-      if (Math.sin(t * 23) > .3) glow(14, -100, 10, '#7cf0ff', .9);
-      cx.strokeStyle = OUT; cx.lineWidth = 1.6; cx.beginPath(); cx.moveTo(-50, -84); cx.lineTo(-40, -88); cx.lineTo(-44, -80); cx.lineTo(-34, -82); cx.stroke();
+      cx.beginPath(); cx.ellipse(-6, -108, 11, 7, -.2, 0, 7); shape(C('#0d1018'), 2);
+      gear(-8, -108, 6, -t * 6, '#9aa6bd', 6);
+      cx.lineWidth = 2; [['#5cc8ff', 2], ['#ff8a1e', -3]].forEach(([c, o]) => { cx.strokeStyle = c; cx.beginPath(); cx.moveTo(-2, -108); cx.quadraticCurveTo(8 + o, -96 + Math.sin(t * 9 + o) * 3, 4 + o, -84); cx.stroke(); });
+      if (Math.sin(t * 23) > .3) glow(2, -92, 10, '#7cf0ff', .9);
+      cx.strokeStyle = OUT; cx.lineWidth = 1.6; cx.beginPath(); cx.moveTo(-50, -76); cx.lineTo(-40, -80); cx.lineTo(-44, -72); cx.lineTo(-34, -74); cx.stroke();
     }
     if (sc >= 2) {
-      cx.strokeStyle = OUT; cx.lineWidth = 1.8; cx.beginPath(); cx.moveTo(40, -128); cx.lineTo(30, -118); cx.lineTo(38, -114); cx.lineTo(26, -102); cx.stroke();
+      cx.strokeStyle = OUT; cx.lineWidth = 1.8; cx.beginPath(); cx.moveTo(36, -128); cx.lineTo(26, -118); cx.lineTo(34, -114); cx.lineTo(22, -102); cx.stroke();
       if (Math.sin(t * 12) > 0) lamp(-24, -128, 3.5, '#ff2a20');
     }
-    // плечо + турбина
-    disc(34, -104, 30, sc >= 2 ? BSC : BLUE);
-    disc(34, -104, 19, '#1a2236');
-    cx.save(); cx.translate(34, -104); cx.rotate(t * (4 + 14 * Math.abs(pr) + 10 * P.kickM));
-    for (let i = 0; i < 6; i++) { cx.rotate(Math.PI / 3); cx.beginPath(); cx.moveTo(3, 0); cx.quadraticCurveTo(10, -6, 16, -2); cx.lineTo(15, 2); cx.closePath(); cx.fillStyle = C('#9fe2ff'); cx.fill(); }
-    cx.restore();
-    glow(34, -104, 26, P.turbo ? '#ff8a1e' : '#4fd2ff', .55 + .35 * Math.abs(Math.sin(t * 6))); lamp(34, -104, 4.5, P.turbo ? '#ffb02e' : '#9ff0ff');
-    // шея и голова
-    limb([46, -110], [N[0] + 6, N[1] + 4], 22, DARK, false);
+    // колесо на плече: крутящаяся шестерёнка + свечение
+    const wx = 29, wy = -92, wsp = t * (4 + 14 * Math.abs(pr) + 10 * P.kickM);
+    spr('gear', '#ffffff', false, 26.5, 26.5, wx, wy, .48, wsp, 1);
+    glow(wx, wy, 24, P.turbo ? '#ff8a1e' : '#4fd2ff', .4 + .3 * Math.abs(Math.sin(t * 6))); lamp(wx, wy, 3.5, P.turbo ? '#ffb02e' : '#9ff0ff');
+    // голова
     cx.save(); cx.translate(N[0], N[1]); cx.rotate(rad(ha));
-    cx.save(); cx.translate(-8, -9); hornPath(); shape(vg(-62, -12, '#a39a7c', .2, .3)); cx.restore();
-    blob([[-20, -10], [-12, -26], [12, -30], [36, -22], [48, -6], [48, 10], [34, 18], [8, 20], [-14, 12]]);
-    shape(vg(-30, 20, BLUE, .4, .45));
-    blob([[32, -6], [50, -6], [56, 6], [50, 16], [32, 16], [28, 4]]); shape(vg(-6, 16, '#7d8597', .3, .35));
-    cx.beginPath(); cx.ellipse(48, 4, 2.5, 3.5, 0, 0, 7); cx.fillStyle = C('#14171f'); cx.fill();
-    cx.lineWidth = 2; cx.strokeStyle = OUT; cx.beginPath(); cx.moveTo(34, 13); cx.lineTo(48, 13); cx.stroke();
-    poly([[8, -16], [28, -14], [24, -9], [6, -9]]); shape(C('#1a2236'), 2);
-    lamp(19, -12, 3.2, '#ffb02e'); glow(19, -12, 12, '#ff8a1e', .6 + .3 * Math.sin(t * 8));
-    poly([[-12, -22], [-26, -32], [-18, -16]]); shape(C(BLUE, -.2), 2);
-    hornPath(); shape(vg(-62, -12, '#d8cfae', .35, .3));
-    cx.strokeStyle = RGBA('#ffffff', .55); cx.lineWidth = 2; cx.beginPath(); cx.moveTo(4, -24); cx.quadraticCurveTo(24, -50, 54, -48); cx.stroke();
+    bullHead(P, S);
+    glow(32, -16, 12, '#ffb02e', .55 + .3 * Math.sin(t * 8));
     cx.restore();
     cx.restore();
     leg(legs[2], 2); leg(legs[3], 3);
