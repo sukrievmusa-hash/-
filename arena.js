@@ -5,6 +5,9 @@
    Опирается на функции из script.js (dueCards, extraNewCards, practiceCards, launch, finish, closeGame, S, save). */
 (() => {
   const FIGHT = 8; // карточек в бою
+  /* сложность боя: доли вопросов по уровням (лёгкие/средние/сложные) и скорость давления босса */
+  const DIFFS = { easy: { name: 'Лёгкий', stars: '★', desc: 'почти все вопросы лёгкие, босс давит медленно', w: [.85, .15, 0], rate: .5 }, mid: { name: 'Средний', stars: '★★', desc: 'в основном лёгкие и средние, босс давит спокойнее', w: [.6, .3, .1], rate: .75 }, hard: { name: 'Тяжёлый', stars: '★★★', desc: 'как раньше: есть сложные вопросы, босс давит в полную силу', w: [.48, .32, .2], rate: 1 } };
+  let DIFF = 'mid';
   // front — какая доля ширины картинки босса заходит «внутрь» схватки; rate — скорость давления (доля пути до стены в секунду)
   const BOSSES = {
     1: { key: 'golem', name: 'Голем Матриц', color: '#ff9a3c', glow: 'rgba(255,150,60,.55)', front: 0.08, rate: 0.022, w: 0.36,
@@ -360,7 +363,7 @@
     if (!F) { raf = 0; return; }
     const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t;
     const now = Date.now(), prev = F.p;
-    if (!paused(now)) F.pt -= F.B.rate * (F.raged ? 1.35 : 1) * (G.practice ? 0.8 : 1) * dt;
+    if (!paused(now)) F.pt -= F.B.rate * DIFFS[DIFF].rate * (F.raged ? 1.35 : 1) * (G.practice ? 0.8 : 1) * dt;
     if (F.koDir) F.pt += F.koDir * dt * 1.4;
     F.p += (F.pt - F.p) * Math.min(1, dt * 9);
     if (!F.ko && F.pt <= -1) F.duel ? duelWall(false) : wallHit();
@@ -783,7 +786,7 @@
   const hasLevels = (sec) => !!(window.SECTION_LEVELS || {})[sec];
   function levelQueue(sec, n) {
     const now = Date.now(), mine = S.cards.filter((c) => sectionOf(c) === sec), used = new Set();
-    const want = [0, Math.round(n * .48), Math.round(n * .32)]; want[3] = n - want[1] - want[2];
+    const dw = DIFFS[DIFF].w, want = [0, Math.round(n * dw[0]), Math.round(n * dw[1])]; want[3] = n - want[1] - want[2];
     const rank = (c) => (c.seen && c.due <= now ? 0 : !c.seen ? 1 : 2);
     const order = (list) => shuffle(list).sort((a, b) => rank(a) - rank(b) || (rank(a) !== 1 ? a.due - b.due : 0));
     const blocks = [1, 2, 3].map((lv) => { const b = order(mine.filter((c) => levelOf(c) === lv)).slice(0, want[lv]); b.forEach((c) => used.add(c.id)); return b; });
@@ -803,7 +806,28 @@
     if (rev.length || fresh.length) return [rev.concat(fresh).slice(0, n), rev.length ? 'rev' : 'new'];
     return [mix(shuffle(mine)).slice(0, n), 'prac'];
   }
-  function fight(sec) {
+
+  /* выбор сложности перед боем */
+  try { const sd = localStorage.getItem('arenaDiff'); if (DIFFS[sd]) DIFF = sd; } catch (e) {}
+  const diffEl = el('div', 'overlay adiff'); diffEl.id = 'arenaDiff'; diffEl.hidden = true;
+  document.body.append(diffEl);
+  function pickDiff(sec) {
+    const B = bossOf(sec);
+    diffEl.innerHTML = ''; diffEl.style.setProperty('--glow', B.glow);
+    const box = el('div', 'hubbox diffbox'), top = el('div', 'gtop'), x = el('button', 'x', '✕'); x.setAttribute('aria-label', 'Закрыть'); x.onclick = () => { diffEl.hidden = true; };
+    top.append(x, el('h2', '', 'СЛОЖНОСТЬ'));
+    box.append(top, el('div', 'muted small hubnote', B.name + ': выберите, с каким уровнем пойдёте в бой.'));
+    Object.entries(DIFFS).forEach(([k, d]) => {
+      const b = el('button', 'dopt dopt-' + k + (k === DIFF ? ' last' : ''));
+      b.append(el('b', '', `${d.stars} ${d.name}`), el('span', 'muted small', d.desc));
+      b.onclick = () => { diffEl.hidden = true; fight(sec, k); };
+      box.append(b);
+    });
+    diffEl.append(box); diffEl.hidden = false;
+  }
+  function fight(sec, d) {
+    if (!d) return pickDiff(sec);
+    DIFF = d; try { localStorage.setItem('arenaDiff', d); } catch (e) {}
     const sc = scopeOf(sec);
     let q = dueCards(sc), mode = 'rev';
     if (!q.length) { q = extraNewCards(sc); mode = 'new'; }

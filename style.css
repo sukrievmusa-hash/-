@@ -220,7 +220,7 @@ button.primary,button.ghost,button.danger,.filebtn{border-radius:8px}
 .taskpanel{border-color:var(--accent)}
 
 /* ================= АРЕНА БОССОВ ================= */
-#game.arena,.ahub{--bg:#0b0e16;--panel:#151a26;--line:#283048;--text:#eef1f8;--muted:#98a2ba;--accent:#3d7bff;
+#game.arena,.ahub,.adiff{--bg:#0b0e16;--panel:#151a26;--line:#283048;--text:#eef1f8;--muted:#98a2ba;--accent:#3d7bff;
   background:radial-gradient(120% 60% at 50% 0%,#1a2340 0%,#0b0e16 60%);color:var(--text)}
 #game.arena .gtop .bar,#game.arena #gHearts,#game.arena #gCombo{display:none}
 #game.arena .gamebox{padding:10px 12px 18px}
@@ -544,3 +544,12 @@ button.primary,button.ghost,button.danger,.filebtn{border-radius:8px}
 @media (max-height:700px){#game.arena .stage{height:208px}#game.arena .aname{font-size:11px}}
 #game.arena .opt.right{border-color:#2fd47a;background:rgba(47,212,122,.2);box-shadow:0 0 0 2px rgba(47,212,122,.35)}
 #game.arena .opt.wrong{border-color:#ff4d4d;background:rgba(255,77,77,.18)}
+
+/* выбор сложности перед боем */
+.adiff{z-index:60;color:var(--text)}
+.diffbox{max-width:420px}
+.dopt{display:flex;flex-direction:column;gap:4px;align-items:flex-start;width:100%;text-align:left;margin-top:10px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:inherit;font:inherit;cursor:pointer}
+.dopt b{font-size:1.1em}
+.dopt.last{border-color:var(--glow,#ffb347)}
+.dopt-easy b{color:#7be495}.dopt-mid b{color:#ffd166}.dopt-hard b{color:#ff6b6b}
+.dopt:active{transform:scale(.98)}
